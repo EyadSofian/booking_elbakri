@@ -33,9 +33,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const { status, body } = this.describe(exception, requestId);
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      // An Error's `message` and `stack` are non-enumerable, so logging the
+      // object alone yields an entry with no useful content — which is exactly
+      // when you most need one. Pull them out explicitly.
+      const err = exception as Partial<Error> & { code?: string; meta?: unknown };
       this.logger.error(
-        { requestId, path: request.url, method: request.method, err: exception },
-        'Unhandled exception',
+        {
+          requestId,
+          path: request.url,
+          method: request.method,
+          name: err?.name,
+          code: err?.code,
+          meta: err?.meta,
+          message: err?.message,
+          stack: err?.stack,
+        },
+        `Unhandled exception: ${err?.message ?? String(exception)}`,
       );
     } else if (status === HttpStatus.FORBIDDEN || status === HttpStatus.UNAUTHORIZED) {
       this.logger.warn({ requestId, path: request.url, code: body.error.code }, 'Access denied');
