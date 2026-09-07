@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * Light theme. Every colour is defined here on bare :root so a token always
+   * has a value; the dark blocks below only override, never introduce.
+   */
+  :root {
+    --background: 210 33% 97%;
+    --foreground: 222 47% 11%;
+
+    --surface: 0 0% 100%;
+    --surface-muted: 210 30% 96%;
+    --surface-raised: 0 0% 100%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 222 70% 19%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 30% 94%;
+    --secondary-foreground: 222 47% 20%;
+
+    --muted: 210 25% 94%;
+    --muted-foreground: 215 16% 42%;
+
+    --accent: 214 60% 94%;
+    --accent-foreground: 222 60% 22%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 58% 32%;
+    --success-foreground: 0 0% 100%;
+    --success-subtle: 152 55% 94%;
+
+    --warning: 32 88% 42%;
+    --warning-foreground: 0 0% 100%;
+    --warning-subtle: 40 92% 93%;
+
+    --info: 213 78% 42%;
+    --info-foreground: 0 0% 100%;
+    --info-subtle: 213 84% 95%;
+
+    --danger: 0 72% 45%;
+    --danger-foreground: 0 0% 100%;
+    --danger-subtle: 0 84% 96%;
+
+    --border: 214 25% 88%;
+    --input: 214 25% 86%;
+    --ring: 222 70% 30%;
+
+    --radius: 0.5rem;
+  }
+
+  /*
+   * Dark theme, designed rather than inverted: the surfaces sit on a cool navy
+   * that belongs with the brand mark, and the status colours are re-picked for
+   * contrast on dark rather than reused from light.
+   */
+  :root[data-theme='dark'] {
+    --background: 222 40% 8%;
+    --foreground: 210 30% 94%;
+
+    --surface: 222 34% 11%;
+    --surface-muted: 222 30% 14%;
+    --surface-raised: 222 30% 15%;
+
+    --card: 222 34% 11%;
+    --card-foreground: 210 30% 94%;
+
+    --popover: 222 34% 13%;
+    --popover-foreground: 210 30% 94%;
+
+    --primary: 214 70% 62%;
+    --primary-foreground: 222 47% 10%;
+
+    --secondary: 222 28% 18%;
+    --secondary-foreground: 210 30% 92%;
+
+    --muted: 222 26% 17%;
+    --muted-foreground: 215 18% 65%;
+
+    --accent: 222 34% 20%;
+    --accent-foreground: 210 35% 92%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 48% 48%;
+    --success-foreground: 152 80% 8%;
+    --success-subtle: 152 30% 18%;
+
+    --warning: 38 82% 58%;
+    --warning-foreground: 32 90% 10%;
+    --warning-subtle: 36 40% 20%;
+
+    --info: 213 78% 62%;
+    --info-foreground: 213 80% 10%;
+    --info-subtle: 213 40% 20%;
+
+    --danger: 0 68% 60%;
+    --danger-foreground: 0 80% 10%;
+    --danger-subtle: 0 35% 20%;
+
+    --border: 222 22% 22%;
+    --input: 222 22% 24%;
+    --ring: 214 70% 55%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * Arabic needs slightly more line height than the Latin face to stay legible
+   * at these sizes, and the numerals stay Western so figures line up in tables.
+   */
+  html[lang='ar'] body {
+    @apply font-arabic;
+    line-height: 1.7;
+    font-feature-settings: normal;
+  }
+
+  html[lang='ar'] table,
+  html[lang='ar'] .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+
+  /* Thin, unobtrusive scrollbars — this app has a lot of scrollable regions. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /*
+   * Directional helpers.
+   *
+   * Layout uses logical properties everywhere, so RTL is a real mirror rather
+   * than a translated LTR page. These few classes cover the cases Tailwind's
+   * physical utilities cannot express.
+   */
+  .flip-rtl {
+    @apply rtl:-scale-x-100;
+  }
+
+  .table-scroll {
+    @apply -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded bg-muted;
+  }
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    content: '';
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--surface) / 0.6),
+      transparent
+    );
+  }
+
+  /* Dense data grid used by every list screen. */
+  .data-table {
+    @apply w-full border-separate border-spacing-0 text-sm;
+  }
+  .data-table thead th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b bg-surface-muted px-3 py-2.5
+           text-start text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+  .data-table tbody td {
+    @apply border-b px-3 py-2.5 align-middle;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-accent/40;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Hides content visually but keeps it available to assistive technology. */
+  .sr-only-focusable:not(:focus):not(:focus-within) {
+    @apply sr-only;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}

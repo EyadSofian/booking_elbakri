@@ -1,0 +1,51 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Prisma
+apps/api/prisma/*.db
+
+# Uploads / private storage
+storage/
+uploads/
+apps/api/storage/
+
+# ---------------------------------------------------------------
+# REAL BUSINESS DATA — never commit customer/financial source data
+# The legacy workbooks are migration INPUTS, not repository content.
+# ---------------------------------------------------------------
+data/legacy/*.xlsx
+data/legacy/*.xls
+data/legacy/*.csv
+!data/legacy/.gitkeep
+!data/legacy/README.md
+docs/_analysis/
+
+# Test artifacts
+playwright-report/
+test-results/

@@ -1,0 +1,1501 @@
+// ELBAKRI OVERSEAS — Operations OS
+// Normalised relational model. JSON is used only for raw legacy snapshots and
+// flexible metadata; every core business concept is a real relational column.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity and access
+// ---------------------------------------------------------------------------
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String
+  fullName       String
+  normalizedName String    @default("")
+  phone          String?
+  locale         String    @default("en")
+  isActive       Boolean   @default(true)
+  lastLoginAt    DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  roles               UserRole[]
+  permissionOverrides UserPermissionOverride[]
+  sessions            Session[]
+  passwordResets      PasswordResetToken[]
+  invitationsSent     InvitationToken[]        @relation("InvitationCreatedBy")
+  apiKeys             ApiKey[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  importRuns          ImportRun[]
+  assignedIssues      DataQualityIssue[]       @relation("IssueAssignee")
+  resolvedIssues      DataQualityIssue[]       @relation("IssueResolver")
+  savedViews          SavedView[]
+  attachments         Attachment[]
+
+  @@index([normalizedName])
+  @@index([isActive])
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  name        String
+  nameAr      String?
+  description String?
+  isSystem    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  groupKey    String
+  description String?
+
+  roles     RolePermission[]
+  overrides UserPermissionOverride[]
+
+  @@index([groupKey])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+/// Per-user grant or revoke that overrides the permissions implied by roles.
+model UserPermissionOverride {
+  id           String  @id @default(uuid())
+  userId       String
+  permissionId String
+  /// true = explicitly granted, false = explicitly revoked.
+  granted      Boolean
+  reason       String?
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@map("user_permission_overrides")
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?
+
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model InvitationToken {
+  id          String    @id @default(uuid())
+  email       String
+  tokenHash   String    @unique
+  roleIds     String[]
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdById String?
+
+  createdAt DateTime @default(now())
+
+  createdBy User? @relation("InvitationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@map("invitation_tokens")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  name        String
+  /// Argon2 hash of the secret. The plaintext key is shown once, never stored.
+  keyHash     String    @unique
+  /// Short non-secret prefix used to identify the key in logs and the UI.
+  keyPrefix   String    @unique
+  scopes      String[]
+  createdById String?
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([revokedAt])
+  @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------
+// Master data + alias system
+// ---------------------------------------------------------------------------
+
+/// Travel agency, supplier or internal brand. SAMA, YELLOW, TAZKARA etc.
+model Partner {
+  id             String  @id @default(uuid())
+  name           String
+  nameAr         String?
+  normalizedName String  @unique
+  type           String  @default("TRAVEL_AGENCY")
+  phone          String?
+  email          String?
+  address        String?
+  notes          String?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  aliases           PartnerAlias[]
+  tripFiles         TripFile[]
+  hotelBookings     HotelBooking[]
+  transferBookings  TransferBooking[]
+  excursionBookings ExcursionBooking[]
+  visaOrders        VisaOrder[]
+  travelers         Traveler[]
+  counterparties    Counterparty[]
+  settlements       Settlement[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("partners")
+}
+
+model PartnerAlias {
+  id         String    @id @default(uuid())
+  partnerId  String
+  alias      String
+  aliasKey   String
+  status     String    @default("APPROVED")
+  source     String?
+  approvedBy String?
+  approvedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([aliasKey, partnerId])
+  @@index([aliasKey])
+  @@map("partner_aliases")
+}
+
+model Hotel {
+  id             String  @id @default(uuid())
+  name           String
+  nameAr         String?
+  normalizedName String  @unique
+  city           String?
+  area           String?
+  starRating     Int?
+  phone          String?
+  email          String?
+  address        String?
+  notes          String?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  aliases           HotelAlias[]
+  bookings          HotelBooking[]
+  staySegments      HotelStaySegment[]
+  excursionBookings ExcursionBooking[]
+  counterparties    Counterparty[]
+
+  @@index([city])
+  @@index([isActive])
+  @@map("hotels")
+}
+
+model HotelAlias {
+  id         String    @id @default(uuid())
+  hotelId    String
+  alias      String
+  aliasKey   String
+  status     String    @default("APPROVED")
+  source     String?
+  approvedBy String?
+  approvedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@unique([aliasKey, hotelId])
+  @@index([aliasKey])
+  @@map("hotel_aliases")
+}
+
+model RoomType {
+  id             String  @id @default(uuid())
+  code           String  @unique
+  name           String
+  nameAr         String?
+  normalizedName String  @unique
+  capacity       Int?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aliases     RoomTypeAlias[]
+  allocations RoomAllocation[]
+
+  @@map("room_types")
+}
+
+model RoomTypeAlias {
+  id         String @id @default(uuid())
+  roomTypeId String
+  alias      String
+  aliasKey   String
+  status     String @default("APPROVED")
+
+  createdAt DateTime @default(now())
+
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([aliasKey, roomTypeId])
+  @@index([aliasKey])
+  @@map("room_type_aliases")
+}
+
+model MealPlan {
+  id             String  @id @default(uuid())
+  code           String  @unique
+  name           String
+  nameAr         String?
+  normalizedName String  @unique
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aliases      MealPlanAlias[]
+  staySegments HotelStaySegment[]
+
+  @@map("meal_plans")
+}
+
+model MealPlanAlias {
+  id         String @id @default(uuid())
+  mealPlanId String
+  alias      String
+  aliasKey   String
+  status     String @default("APPROVED")
+
+  createdAt DateTime @default(now())
+
+  mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([aliasKey, mealPlanId])
+  @@index([aliasKey])
+  @@map("meal_plan_aliases")
+}
+
+/// Airport, hotel pickup point, city or landmark used by transfers.
+model Location {
+  id             String  @id @default(uuid())
+  name           String
+  nameAr         String?
+  normalizedName String  @unique
+  kind           String  @default("OTHER")
+  city           String?
+  iataCode       String?
+  hotelId        String?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aliases  LocationAlias[]
+  legsFrom TransferLeg[]   @relation("LegFrom")
+  legsTo   TransferLeg[]   @relation("LegTo")
+
+  @@index([kind])
+  @@map("locations")
+}
+
+model LocationAlias {
+  id         String @id @default(uuid())
+  locationId String
+  alias      String
+  aliasKey   String
+  status     String @default("APPROVED")
+
+  createdAt DateTime @default(now())
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([aliasKey, locationId])
+  @@index([aliasKey])
+  @@map("location_aliases")
+}
+
+model ExcursionCatalogItem {
+  id                        String  @id @default(uuid())
+  code                      String  @unique
+  name                      String
+  nameAr                    String?
+  normalizedName            String  @unique
+  category                  String?
+  defaultDurationMinutes    Int?
+  transferIncludedByDefault Boolean @default(false)
+  isActive                  Boolean @default(true)
+  notes                     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aliases ExcursionAlias[]
+  items   ExcursionItem[]
+
+  @@map("excursion_catalog_items")
+}
+
+model ExcursionAlias {
+  id            String @id @default(uuid())
+  catalogItemId String
+  alias         String
+  aliasKey      String
+  status        String @default("APPROVED")
+
+  createdAt DateTime @default(now())
+
+  catalogItem ExcursionCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@unique([aliasKey, catalogItemId])
+  @@index([aliasKey])
+  @@map("excursion_aliases")
+}
+
+model Nationality {
+  id             String  @id @default(uuid())
+  /// ISO 3166-1 alpha-2 where known.
+  code           String  @unique
+  name           String
+  nameAr         String?
+  normalizedName String  @unique
+
+  createdAt DateTime @default(now())
+
+  aliases   NationalityAlias[]
+  travelers Traveler[]
+
+  @@map("nationalities")
+}
+
+model NationalityAlias {
+  id            String @id @default(uuid())
+  nationalityId String
+  alias         String
+  aliasKey      String
+  status        String @default("APPROVED")
+
+  createdAt DateTime @default(now())
+
+  nationality Nationality @relation(fields: [nationalityId], references: [id], onDelete: Cascade)
+
+  @@unique([aliasKey, nationalityId])
+  @@index([aliasKey])
+  @@map("nationality_aliases")
+}
+
+model Vehicle {
+  id          String  @id @default(uuid())
+  plateNumber String  @unique
+  model       String?
+  capacity    Int?
+  type        String?
+  isActive    Boolean @default(true)
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  legs TransferLeg[]
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id              String  @id @default(uuid())
+  fullName        String
+  normalizedName  String
+  phone           String?
+  phoneNormalized String?
+  licenseNumber   String?
+  isActive        Boolean @default(true)
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  legs TransferLeg[]
+
+  @@index([normalizedName])
+  @@map("drivers")
+}
+
+/// Alias suggestions awaiting review, across every master-data type.
+model AliasMapping {
+  id            String    @id @default(uuid())
+  entityType    String
+  rawValue      String
+  aliasKey      String
+  suggestedId   String?
+  suggestedName String?
+  score         Float?
+  status        String    @default("SUGGESTED")
+  resolvedId    String?
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  importRunId   String?
+  occurrences   Int       @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  importRun ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  @@unique([entityType, aliasKey])
+  @@index([status])
+  @@index([entityType])
+  @@map("alias_mappings")
+}
+
+// ---------------------------------------------------------------------------
+// Travellers and trip files
+// ---------------------------------------------------------------------------
+
+model Traveler {
+  id                 String    @id @default(uuid())
+  /// Exact name as supplied. Never overwritten by normalisation.
+  fullName           String
+  fullNameAr         String?
+  normalizedName     String
+  phoneRaw           String?
+  phoneNormalized    String?
+  phoneDigits        String?
+  countryCallingCode String?
+  email              String?
+  nationalityId      String?
+  /// Free-text nationality kept when it could not be resolved to a master row.
+  nationalityRaw     String?
+  passportNumber     String?
+  dateOfBirth        DateTime?
+  partnerId          String?
+  notes              String?
+  isActive           Boolean   @default(true)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  /// Provenance of an imported record.
+  legacySource Json?
+  importRunId  String?
+
+  nationality Nationality? @relation(fields: [nationalityId], references: [id], onDelete: SetNull)
+  partner     Partner?     @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  importRun   ImportRun?   @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  tripsAsLead       TripFile[]         @relation("TripLeadTraveler")
+  tripMemberships   TripTraveler[]
+  hotelBookings     HotelBooking[]
+  roomAllocations   RoomAllocation[]
+  transferBookings  TransferBooking[]
+  excursionBookings ExcursionBooking[]
+  visaOrders        VisaOrder[]
+  visaApplicants    VisaApplicant[]
+
+  @@index([normalizedName])
+  @@index([phoneNormalized])
+  @@index([phoneDigits])
+  @@index([partnerId])
+  @@map("travelers")
+}
+
+/// The central aggregate: one operational file per traveller or group.
+model TripFile {
+  id                    String    @id @default(uuid())
+  reference             String    @unique
+  leadTravelerId        String?
+  partnerId             String?
+  status                String    @default("DRAFT")
+  /// Derived from child services, correctable by an authorised user.
+  travelStartDate       DateTime?
+  travelEndDate         DateTime?
+  travelDatesOverridden Boolean   @default(false)
+  paxCount              Int?
+  childCount            Int?
+  notes                 String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+  /// Optimistic-concurrency counter.
+  version     Int       @default(1)
+
+  legacySource Json?
+  importRunId  String?
+
+  leadTraveler Traveler?  @relation("TripLeadTraveler", fields: [leadTravelerId], references: [id], onDelete: SetNull)
+  partner      Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  importRun    ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  travelers          TripTraveler[]
+  hotelBookings      HotelBooking[]
+  transferBookings   TransferBooking[]
+  excursionBookings  ExcursionBooking[]
+  visaOrders         VisaOrder[]
+  financialDocuments FinancialDocument[]
+  attachments        Attachment[]
+  statusHistory      StatusTransition[]
+
+  @@index([status])
+  @@index([travelStartDate])
+  @@index([travelEndDate])
+  @@index([partnerId])
+  @@index([leadTravelerId])
+  @@map("trip_files")
+}
+
+model TripTraveler {
+  id         String  @id @default(uuid())
+  tripFileId String
+  travelerId String
+  role       String  @default("MEMBER")
+  isChild    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  tripFile TripFile @relation(fields: [tripFileId], references: [id], onDelete: Cascade)
+  traveler Traveler @relation(fields: [travelerId], references: [id], onDelete: Cascade)
+
+  @@unique([tripFileId, travelerId])
+  @@map("trip_travelers")
+}
+
+/// Immutable log of every status change on any workflow entity.
+model StatusTransition {
+  id         String  @id @default(uuid())
+  entityType String
+  entityId   String
+  fromStatus String?
+  toStatus   String
+  reason     String?
+  actorId    String?
+  tripFileId String?
+
+  createdAt DateTime @default(now())
+
+  tripFile TripFile? @relation(fields: [tripFileId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("status_transitions")
+}
+
+// ---------------------------------------------------------------------------
+// Hotel bookings
+// ---------------------------------------------------------------------------
+
+model HotelBooking {
+  id                 String    @id @default(uuid())
+  reference          String    @unique
+  tripFileId         String
+  leadTravelerId     String?
+  partnerId          String?
+  hotelId            String?
+  /// Kept when the hotel text could not be resolved to a master record.
+  hotelRaw           String?
+  bookingDate        DateTime?
+  confirmationNumber String?
+  status             String    @default("DRAFT")
+  notes              String?
+  securityApprovalRequired Boolean @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+  version     Int       @default(1)
+
+  legacySource Json?
+  importRunId  String?
+
+  tripFile     TripFile   @relation(fields: [tripFileId], references: [id], onDelete: Cascade)
+  leadTraveler Traveler?  @relation(fields: [leadTravelerId], references: [id], onDelete: SetNull)
+  partner      Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  hotel        Hotel?     @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+  importRun    ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  staySegments       HotelStaySegment[]
+  financialDocuments FinancialDocument[]
+  attachments        Attachment[]
+
+  @@index([tripFileId])
+  @@index([status])
+  @@index([hotelId])
+  @@index([bookingDate])
+  @@map("hotel_bookings")
+}
+
+/// One continuous stay at one hotel. A booking may hold several segments —
+/// this is what the blank-NAME continuation rows in the legacy sheet encode.
+model HotelStaySegment {
+  id             String    @id @default(uuid())
+  hotelBookingId String
+  hotelId        String?
+  hotelRaw       String?
+  checkIn        DateTime?
+  checkOut       DateTime?
+  /// Always derived on the server from checkIn/checkOut.
+  nights         Int?
+  mealPlanId     String?
+  mealPlanRaw    String?
+  sequence       Int       @default(1)
+  notes          String?
+
+  /// Raw legacy values retained for every date that needed interpretation.
+  checkInRaw          String?
+  checkOutRaw         String?
+  checkInParseStatus  String?
+  checkOutParseStatus String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  legacySource Json?
+
+  hotelBooking HotelBooking @relation(fields: [hotelBookingId], references: [id], onDelete: Cascade)
+  hotel        Hotel?       @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+  mealPlan     MealPlan?    @relation(fields: [mealPlanId], references: [id], onDelete: SetNull)
+
+  roomAllocations RoomAllocation[]
+
+  @@index([hotelBookingId])
+  @@index([checkIn])
+  @@index([checkOut])
+  @@map("hotel_stay_segments")
+}
+
+model RoomAllocation {
+  id                 String  @id @default(uuid())
+  hotelStaySegmentId String
+  roomTypeId         String?
+  roomTypeRaw        String?
+  quantity           Int     @default(1)
+  adults             Int?
+  children           Int?
+  occupantTravelerId String?
+  roomNumber         String?
+  notes              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staySegment      HotelStaySegment @relation(fields: [hotelStaySegmentId], references: [id], onDelete: Cascade)
+  roomType         RoomType?        @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
+  occupantTraveler Traveler?        @relation(fields: [occupantTravelerId], references: [id], onDelete: SetNull)
+
+  @@index([hotelStaySegmentId])
+  @@map("room_allocations")
+}
+
+// ---------------------------------------------------------------------------
+// Transfers
+// ---------------------------------------------------------------------------
+
+model TransferBooking {
+  id             String  @id @default(uuid())
+  reference      String  @unique
+  tripFileId     String
+  leadTravelerId String?
+  partnerId      String?
+  paxCount       Int?
+  paxCountRaw    String?
+  status         String  @default("DRAFT")
+  notes          String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+  version     Int       @default(1)
+
+  legacySource Json?
+  importRunId  String?
+
+  tripFile     TripFile   @relation(fields: [tripFileId], references: [id], onDelete: Cascade)
+  leadTraveler Traveler?  @relation(fields: [leadTravelerId], references: [id], onDelete: SetNull)
+  partner      Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  importRun    ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  legs        TransferLeg[]
+  attachments Attachment[]
+
+  @@index([tripFileId])
+  @@index([status])
+  @@map("transfer_bookings")
+}
+
+model TransferLeg {
+  id                String    @id @default(uuid())
+  transferBookingId String
+  sequence          Int       @default(1)
+  direction         String    @default("OTHER")
+  fromLocationId    String?
+  fromRaw           String?
+  toLocationId      String?
+  toRaw             String?
+  serviceDate       DateTime?
+  serviceDateRaw    String?
+  /// Minutes since midnight. Rendered as HH:mm by the UI.
+  pickupTimeMinutes Int?
+  /// The untouched legacy pickup text, e.g. "AT NOON" or "9 :30 AM".
+  pickupTimeRaw     String?
+  pickupTimeParseStatus String?
+  flightNumber      String?
+  paxCount          Int?
+  driverId          String?
+  vehicleId         String?
+  supplierPartnerId String?
+  meetAndGreet      Boolean   @default(false)
+  flowerBouquet     Boolean   @default(false)
+  securityApprovalRequired Boolean @default(false)
+  status            String    @default("DRAFT")
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int      @default(1)
+
+  legacySource Json?
+
+  transferBooking TransferBooking @relation(fields: [transferBookingId], references: [id], onDelete: Cascade)
+  fromLocation    Location?       @relation("LegFrom", fields: [fromLocationId], references: [id], onDelete: SetNull)
+  toLocation      Location?       @relation("LegTo", fields: [toLocationId], references: [id], onDelete: SetNull)
+  driver          Driver?         @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  vehicle         Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([transferBookingId])
+  @@index([serviceDate])
+  @@index([status])
+  @@index([flightNumber])
+  @@index([driverId])
+  @@map("transfer_legs")
+}
+
+// ---------------------------------------------------------------------------
+// Excursions
+// ---------------------------------------------------------------------------
+
+model ExcursionBooking {
+  id             String  @id @default(uuid())
+  reference      String  @unique
+  tripFileId     String
+  leadTravelerId String?
+  partnerId      String?
+  hotelId        String?
+  hotelRaw       String?
+  paxCount       Int?
+  childCount     Int?
+  status         String  @default("DRAFT")
+  notes          String?
+
+  /// The legacy REST column. Its business meaning is not reliably known from
+  /// the source workbook, so the exact value is preserved verbatim and no
+  /// financial interpretation is applied. See docs/B-LEGACY-EXCEL-MAPPING.md.
+  legacyRestRaw  String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+  version     Int       @default(1)
+
+  legacySource Json?
+  importRunId  String?
+
+  tripFile     TripFile   @relation(fields: [tripFileId], references: [id], onDelete: Cascade)
+  leadTraveler Traveler?  @relation(fields: [leadTravelerId], references: [id], onDelete: SetNull)
+  partner      Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  hotel        Hotel?     @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+  importRun    ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  items       ExcursionItem[]
+  attachments Attachment[]
+
+  @@index([tripFileId])
+  @@index([status])
+  @@map("excursion_bookings")
+}
+
+model ExcursionItem {
+  id                 String    @id @default(uuid())
+  excursionBookingId String
+  catalogItemId      String?
+  /// Original activity text, e.g. "sunrise safari&dbl motor".
+  activityRaw        String?
+  sequence           Int       @default(1)
+  serviceDate        DateTime?
+  serviceDateRaw     String?
+  serviceTimeMinutes Int?
+  paxOverride        Int?
+  childOverride      Int?
+  transferRequired   Boolean   @default(false)
+  guideRequired      Boolean   @default(false)
+  addOns             String?
+  supplierPartnerId  String?
+  status             String    @default("DRAFT")
+  notes              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int      @default(1)
+
+  legacySource Json?
+
+  excursionBooking ExcursionBooking      @relation(fields: [excursionBookingId], references: [id], onDelete: Cascade)
+  catalogItem      ExcursionCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+
+  @@index([excursionBookingId])
+  @@index([serviceDate])
+  @@index([status])
+  @@map("excursion_items")
+}
+
+// ---------------------------------------------------------------------------
+// Visas
+// ---------------------------------------------------------------------------
+
+model VisaOrder {
+  id             String    @id @default(uuid())
+  reference      String    @unique
+  tripFileId     String
+  leadTravelerId String?
+  partnerId      String?
+  originRaw      String?
+  destinationRaw String?
+  paxCount       Int?
+  serviceDate    DateTime?
+  serviceDateRaw String?
+  netAmount      Decimal?  @db.Decimal(14, 2)
+  sellAmount     Decimal?  @db.Decimal(14, 2)
+  currency       String    @default("USD")
+  status         String    @default("DRAFT")
+  notes          String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+  version     Int       @default(1)
+
+  legacySource Json?
+  importRunId  String?
+
+  tripFile     TripFile   @relation(fields: [tripFileId], references: [id], onDelete: Cascade)
+  leadTraveler Traveler?  @relation(fields: [leadTravelerId], references: [id], onDelete: SetNull)
+  partner      Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  importRun    ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  applicants  VisaApplicant[]
+  attachments Attachment[]
+
+  @@index([tripFileId])
+  @@index([status])
+  @@index([serviceDate])
+  @@map("visa_orders")
+}
+
+/// Per-applicant detail. The legacy sheet only recorded an aggregate PAX count,
+/// so an order may legitimately have zero applicant rows.
+model VisaApplicant {
+  id             String    @id @default(uuid())
+  visaOrderId    String
+  travelerId     String?
+  fullName       String?
+  passportNumber String?
+  passportExpiry DateTime?
+  status         String    @default("DOCUMENTS_PENDING")
+  documentsComplete Boolean @default(false)
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  visaOrder VisaOrder @relation(fields: [visaOrderId], references: [id], onDelete: Cascade)
+  traveler  Traveler? @relation(fields: [travelerId], references: [id], onDelete: SetNull)
+
+  @@index([visaOrderId])
+  @@map("visa_applicants")
+}
+
+// ---------------------------------------------------------------------------
+// Finance
+// ---------------------------------------------------------------------------
+
+/// Anyone money is owed to or by. Generic on purpose: a hotel, an agency, a
+/// supplier or a driver all become counterparties, so no partner is special-cased.
+model Counterparty {
+  id             String  @id @default(uuid())
+  name           String
+  normalizedName String
+  type           String  @default("OTHER")
+  hotelId        String?
+  partnerId      String?
+  contactName    String?
+  phone          String?
+  email          String?
+  notes          String?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  hotel   Hotel?   @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+  partner Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
+  documents   FinancialDocument[]
+  payments    PaymentTransaction[]
+  settlements Settlement[]
+
+  @@unique([normalizedName, type])
+  @@index([type])
+  @@map("counterparties")
+}
+
+/// A payable or receivable. The outstanding balance is never stored here —
+/// it is always derived from the payment ledger.
+model FinancialDocument {
+  id                 String    @id @default(uuid())
+  reference          String    @unique
+  type               String    @default("PAYABLE")
+  counterpartyId     String?
+  tripFileId         String?
+  hotelBookingId     String?
+  /// Denormalised description of the service this document pays for.
+  serviceDescription String?
+  totalAmount        Decimal   @db.Decimal(14, 2)
+  currency           String    @default("EGP")
+  issueDate          DateTime?
+  dueDate            DateTime?
+  /// The hotel check-in / service date, used for ageing and operations views.
+  serviceDate        DateTime?
+  status             String    @default("OPEN")
+  notes              String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+  version     Int       @default(1)
+
+  /// Untouched legacy snapshot from the PYAMNT worksheet. Never rewritten.
+  legacyTotalRaw       String?
+  legacyPaidRaw        String?
+  legacyRestRaw        String?
+  legacyPaymentDateRaw String?
+  legacyStatusRaw      String?
+  legacySource         Json?
+  importRunId          String?
+
+  counterparty Counterparty? @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+  tripFile     TripFile?     @relation(fields: [tripFileId], references: [id], onDelete: SetNull)
+  hotelBooking HotelBooking? @relation(fields: [hotelBookingId], references: [id], onDelete: SetNull)
+  importRun    ImportRun?    @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  payments    PaymentTransaction[]
+  attachments Attachment[]
+
+  @@index([status])
+  @@index([counterpartyId])
+  @@index([dueDate])
+  @@index([serviceDate])
+  @@index([tripFileId])
+  @@map("financial_documents")
+}
+
+/// An immutable money movement. Corrections are made by posting a REVERSAL,
+/// never by editing or deleting the original row.
+model PaymentTransaction {
+  id                  String    @id @default(uuid())
+  reference           String    @unique
+  financialDocumentId String?
+  counterpartyId      String?
+  settlementId        String?
+  amount              Decimal   @db.Decimal(14, 2)
+  currency            String    @default("EGP")
+  paymentDate         DateTime
+  method              String    @default("UNKNOWN")
+  paymentReference    String?
+  status              String    @default("POSTED")
+  /// Set on the reversal entry, pointing at the payment it cancels.
+  reversesPaymentId   String?   @unique
+  reversedAt          DateTime?
+  reversedById        String?
+  reversalReason      String?
+  notes               String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  legacySource Json?
+  importRunId  String?
+
+  financialDocument FinancialDocument?  @relation(fields: [financialDocumentId], references: [id], onDelete: SetNull)
+  counterparty      Counterparty?       @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+  settlement        Settlement?         @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  importRun         ImportRun?          @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  reverses          PaymentTransaction? @relation("PaymentReversal", fields: [reversesPaymentId], references: [id], onDelete: SetNull)
+  reversedBy        PaymentTransaction? @relation("PaymentReversal")
+
+  attachments Attachment[]
+
+  @@index([financialDocumentId])
+  @@index([counterpartyId])
+  @@index([paymentDate])
+  @@index([status])
+  @@map("payment_transactions")
+}
+
+/// A periodic settlement with a partner. The SAMA worksheet becomes rows here
+/// against the SAMA partner — the structure is generic and works for any partner.
+model Settlement {
+  id             String    @id @default(uuid())
+  reference      String    @unique
+  partnerId      String?
+  counterpartyId String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  totalAmount    Decimal   @db.Decimal(14, 2)
+  currency       String    @default("EGP")
+  status         String    @default("OPEN")
+  description    String?
+  descriptionAr  String?
+  notes          String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  version     Int       @default(1)
+
+  legacySource Json?
+  importRunId  String?
+
+  partner      Partner?      @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  counterparty Counterparty? @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+  importRun    ImportRun?    @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  payments PaymentTransaction[]
+
+  @@index([partnerId])
+  @@index([status])
+  @@map("settlements")
+}
+
+// ---------------------------------------------------------------------------
+// Data governance: import, data quality, audit
+// ---------------------------------------------------------------------------
+
+model ImportRun {
+  id             String    @id @default(uuid())
+  sourceFilename String
+  /// SHA-256 of the uploaded workbook. Guards against a duplicate import.
+  checksum       String
+  fileSizeBytes  Int
+  storagePath    String?
+  status         String    @default("UPLOADED")
+  uploadedById   String?
+  analyzedAt     DateTime?
+  appliedAt      DateTime?
+  failedReason   String?
+
+  /// Full analysis output: sheets, detected headers, column mapping, counts.
+  analysis         Json?
+  /// Reconciliation proving every scanned row is accounted for.
+  reconciliation   Json?
+  rowsScanned      Int  @default(0)
+  rowsBlank        Int  @default(0)
+  rowsStructural   Int  @default(0)
+  rowsMaster       Int  @default(0)
+  rowsContinuation Int  @default(0)
+  rowsOrphan       Int  @default(0)
+  recordsCreated   Int  @default(0)
+  recordsMatched   Int  @default(0)
+  warningCount     Int  @default(0)
+  errorCount       Int  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  sheets            ImportSheet[]
+  rows              ImportRow[]
+  issues            ImportIssue[]
+  dataQualityIssues DataQualityIssue[]
+  aliasMappings     AliasMapping[]
+
+  travelers          Traveler[]
+  tripFiles          TripFile[]
+  hotelBookings      HotelBooking[]
+  transferBookings   TransferBooking[]
+  excursionBookings  ExcursionBooking[]
+  visaOrders         VisaOrder[]
+  financialDocuments FinancialDocument[]
+  payments           PaymentTransaction[]
+  settlements        Settlement[]
+
+  @@index([status])
+  @@index([checksum])
+  @@map("import_runs")
+}
+
+model ImportSheet {
+  id              String  @id @default(uuid())
+  importRunId     String
+  sheetName       String
+  /// Which legacy layout this sheet was recognised as, e.g. HOTEL_BOOKING.
+  detectedKind    String?
+  headerRow       Int?
+  maxRow          Int     @default(0)
+  maxColumn       Int     @default(0)
+  rowsScanned     Int     @default(0)
+  /// Column letter -> logical field, plus any columns with no mapping.
+  columnMapping   Json?
+  unmappedColumns String[]
+  isEmpty         Boolean @default(false)
+  stats           Json?
+
+  createdAt DateTime @default(now())
+
+  importRun ImportRun   @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+  rows      ImportRow[]
+
+  @@unique([importRunId, sheetName])
+  @@map("import_sheets")
+}
+
+/// One physical worksheet row, with its raw values kept forever so that any
+/// imported record can be traced back to exactly what the spreadsheet said.
+model ImportRow {
+  id              String  @id @default(uuid())
+  importRunId     String
+  importSheetId   String
+  rowNumber       Int
+  kind            String
+  masterRowNumber Int?
+  /// Verbatim cell values keyed by logical field name.
+  rawValues       Json
+  /// Values from columns with no mapping. Never discarded.
+  unmappedValues  Json?
+  /// Values after parsing/normalisation, with parse status per field.
+  normalizedValues Json?
+  /// Entity type and id this row produced, once applied.
+  createdEntityType String?
+  createdEntityId   String?
+  matchedEntityId   String?
+  sectionLabel      String?
+  applied           Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  importRun   ImportRun     @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+  importSheet ImportSheet   @relation(fields: [importSheetId], references: [id], onDelete: Cascade)
+  issues      ImportIssue[]
+
+  @@unique([importSheetId, rowNumber])
+  @@index([importRunId])
+  @@index([kind])
+  @@map("import_rows")
+}
+
+model ImportIssue {
+  id          String  @id @default(uuid())
+  importRunId String
+  importRowId String?
+  category    String
+  severity    String  @default("WARNING")
+  field       String?
+  rawValue    String?
+  message     String
+  suggestion  String?
+  details     Json?
+
+  createdAt DateTime @default(now())
+
+  importRun ImportRun  @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+  importRow ImportRow? @relation(fields: [importRowId], references: [id], onDelete: Cascade)
+
+  @@index([importRunId])
+  @@index([category])
+  @@index([severity])
+  @@map("import_issues")
+}
+
+/// A persistent data-quality issue on a live record. Survives page refreshes,
+/// re-imports and re-analysis until someone resolves or explicitly ignores it.
+model DataQualityIssue {
+  id         String  @id @default(uuid())
+  category   String
+  severity   String  @default("WARNING")
+  status     String  @default("OPEN")
+  entityType String
+  entityId   String?
+  field      String?
+  rawValue   String?
+  message    String
+  suggestion String?
+  details    Json?
+
+  /// Stable key so re-running analysis updates rather than duplicates an issue.
+  fingerprint String @unique
+
+  sourceWorkbook String?
+  sourceSheet    String?
+  sourceRow      Int?
+  importRunId    String?
+
+  assignedToId    String?
+  resolvedById    String?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  importRun  ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  assignedTo User?      @relation("IssueAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolvedBy User?      @relation("IssueResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([category])
+  @@index([severity])
+  @@index([entityType, entityId])
+  @@index([assignedToId])
+  @@map("data_quality_issues")
+}
+
+model AuditLog {
+  id         String  @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String?
+  actorId    String?
+  actorLabel String?
+  requestId  String?
+  ipAddress  String?
+  userAgent  String?
+  /// Snapshot before the change, for update and delete actions.
+  before     Json?
+  after      Json?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model Attachment {
+  id          String  @id @default(uuid())
+  filename    String
+  contentType String
+  sizeBytes   Int
+  /// Path in private storage. Never served from a public static URL.
+  storageKey  String  @unique
+  checksum    String?
+  category    String  @default("OTHER")
+  /// Documents such as passports are restricted to holders of a permission.
+  isSensitive Boolean @default(false)
+  description String?
+
+  tripFileId          String?
+  hotelBookingId      String?
+  transferBookingId   String?
+  excursionBookingId  String?
+  visaOrderId         String?
+  financialDocumentId String?
+  paymentId           String?
+
+  uploadedById String?
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+
+  uploadedBy        User?               @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  tripFile          TripFile?           @relation(fields: [tripFileId], references: [id], onDelete: Cascade)
+  hotelBooking      HotelBooking?       @relation(fields: [hotelBookingId], references: [id], onDelete: Cascade)
+  transferBooking   TransferBooking?    @relation(fields: [transferBookingId], references: [id], onDelete: Cascade)
+  excursionBooking  ExcursionBooking?   @relation(fields: [excursionBookingId], references: [id], onDelete: Cascade)
+  visaOrder         VisaOrder?          @relation(fields: [visaOrderId], references: [id], onDelete: Cascade)
+  financialDocument FinancialDocument?  @relation(fields: [financialDocumentId], references: [id], onDelete: Cascade)
+  payment           PaymentTransaction? @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([tripFileId])
+  @@index([category])
+  @@map("attachments")
+}
+
+model Notification {
+  id         String    @id @default(uuid())
+  userId     String
+  type       String
+  severity   String    @default("INFO")
+  title      String
+  titleAr    String?
+  body       String?
+  bodyAr     String?
+  entityType String?
+  entityId   String?
+  link       String?
+  readAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model SavedView {
+  id       String  @id @default(uuid())
+  userId   String
+  name     String
+  resource String
+  /// Filters, sorting, visible columns and page size.
+  config   Json
+  isShared Boolean @default(false)
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resource, name])
+  @@index([resource])
+  @@map("saved_views")
+}
+
+model SystemSetting {
+  key         String  @id
+  value       Json
+  description String?
+  updatedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+/// Monotonic counters used to build human-readable references such as
+/// EB-2026-000123, kept in the database so concurrent requests cannot collide.
+model ReferenceSequence {
+  id      String @id @default(uuid())
+  prefix  String
+  year    Int
+  current Int    @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([prefix, year])
+  @@map("reference_sequences")
+}

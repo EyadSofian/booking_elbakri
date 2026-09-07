@@ -1,0 +1,36 @@
+{
+  "name": "elbakri-operations",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ELBAKRI OVERSEAS — Booking, Operations & Finance Management System",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "npm run build -w @elbakri/shared && npm run build -w @elbakri/api && npm run build -w @elbakri/web",
+    "build:shared": "npm run build -w @elbakri/shared",
+    "build:api": "npm run build -w @elbakri/shared && npm run build -w @elbakri/api",
+    "build:web": "npm run build -w @elbakri/shared && npm run build -w @elbakri/web",
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w @elbakri/api\" \"npm run dev -w @elbakri/web\"",
+    "dev:api": "npm run dev -w @elbakri/api",
+    "dev:web": "npm run dev -w @elbakri/web",
+    "test": "npm run test -w @elbakri/shared && npm run test -w @elbakri/api",
+    "test:shared": "npm run test -w @elbakri/shared",
+    "test:api": "npm run test -w @elbakri/api",
+    "test:e2e": "npm run test:e2e -w @elbakri/web",
+    "prisma:generate": "npm run prisma:generate -w @elbakri/api",
+    "prisma:migrate": "npm run prisma:migrate -w @elbakri/api",
+    "prisma:deploy": "npm run prisma:deploy -w @elbakri/api",
+    "seed": "npm run seed -w @elbakri/api",
+    "lint": "npm run lint -w @elbakri/api && npm run lint -w @elbakri/web",
+    "typecheck": "npm run typecheck -w @elbakri/shared && npm run typecheck -w @elbakri/api && npm run typecheck -w @elbakri/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
