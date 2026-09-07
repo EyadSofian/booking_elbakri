@@ -14,14 +14,33 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 
+/**
+ * As returned by `GET /reports` — the endpoint wraps the list and carries only
+ * the key and whether a legacy layout exists. The label and description come
+ * from the dictionary, which is where translated text belongs anyway.
+ */
 interface ReportDefinition {
   key: string;
-  title: string;
-  titleAr?: string | null;
-  description: string | null;
-  /** Whether the report also offers the original spreadsheet column layout. */
   supportsLegacyLayout: boolean;
-  supportsDateRange: boolean;
+}
+
+/** Report keys map to existing dictionary entries rather than English from the API. */
+function reportLabel(key: string, t: ReturnType<typeof useI18n>['t']): string {
+  const labels: Record<string, string> = {
+    'hotel-bookings': t.nav.hotelBookings,
+    transfers: t.nav.transfers,
+    excursions: t.nav.excursions,
+    visas: t.nav.visas,
+    payables: t.nav.payables,
+    payments: t.nav.payments,
+    outstanding: t.finance.outstanding,
+    'todays-operations': t.nav.todaysOperations,
+    agency: t.nav.partners,
+    hotel: t.nav.hotels,
+    trips: t.nav.tripFiles,
+    travelers: t.nav.travelers,
+  };
+  return labels[key] ?? key;
 }
 
 export default function ReportsPage() {
@@ -32,7 +51,10 @@ export default function ReportsPage() {
 
   const query = useQuery({
     queryKey: ['reports'],
-    queryFn: () => api.get<ReportDefinition[]>('/reports'),
+    queryFn: async () => {
+      const r = await api.get<{ reports: ReportDefinition[] }>('/reports');
+      return r.reports ?? [];
+    },
   });
 
   const download = async (report: ReportDefinition, legacy: boolean) => {
@@ -40,8 +62,8 @@ export default function ReportsPage() {
     setBusy(id);
     try {
       await api.download(`/reports/${report.key}.xlsx`, {
-        dateFrom: report.supportsDateRange && dateFrom ? dateFrom : undefined,
-        dateTo: report.supportsDateRange && dateTo ? dateTo : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
         legacyLayout: legacy ? 'true' : undefined,
       });
     } catch (err) {
@@ -105,12 +127,9 @@ export default function ReportsPage() {
               <CardHeader className="flex-1">
                 <CardTitle className="flex items-start gap-2">
                   <FileSpreadsheet className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span>{(locale === 'ar' && report.titleAr) || report.title}</span>
+                  <span>{reportLabel(report.key, t)}</span>
                 </CardTitle>
-                {report.description ? (
-                  <p className="text-xs text-muted-foreground">{report.description}</p>
-                ) : null}
-                {report.supportsDateRange && (dateFrom || dateTo) ? (
+                {dateFrom || dateTo ? (
                   <Badge variant="outline" className="mt-1 w-fit">
                     {dateFrom || '…'} → {dateTo || '…'}
                   </Badge>

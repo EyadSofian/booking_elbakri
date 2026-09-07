@@ -10,11 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+/** As returned by `GET /settings`. The value's type is inferred, not declared. */
 interface Setting {
   key: string;
-  value: string | number | boolean | null;
+  value: unknown;
   description: string | null;
-  valueType: string;
+  updatedAt: string;
 }
 
 export default function SettingsPage() {
@@ -71,8 +72,14 @@ export default function SettingsPage() {
                       <Input
                         id={setting.key}
                         name="value"
-                        defaultValue={String(setting.value ?? '')}
-                        type={setting.valueType === 'NUMBER' ? 'number' : 'text'}
+                        defaultValue={
+                          typeof setting.value === 'object' && setting.value !== null
+                            ? JSON.stringify(setting.value)
+                            : String(setting.value ?? '')
+                        }
+                        // The API does not declare a type, so it is inferred
+                        // from the current value rather than assumed.
+                        type={typeof setting.value === 'number' ? 'number' : 'text'}
                       />
                     </div>
                     <Button type="submit" size="sm" variant="outline">{t.common.save}</Button>

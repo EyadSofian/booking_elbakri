@@ -392,6 +392,8 @@ export const en = {
       'Outstanding is calculated from the payment ledger. It cannot be typed in.',
     reconciliationHint:
       'The legacy figures below are shown exactly as the original workbook recorded them. They are never modified.',
+    noBalancesHint: 'Counterparty balances appear here once payables exist.',
+    noPaymentsHint: 'Payments recorded against payables appear here.',
     restLooksLikeSum:
       'The legacy REST equals Total + Paid rather than the remaining balance.',
   },

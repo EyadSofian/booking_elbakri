@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import {
-  AlertTriangle, Receipt, Scale, TrendingUp, Wallet,
-} from 'lucide-react';
+import { AlertTriangle, Receipt, Scale, TrendingUp, Wallet } from 'lucide-react';
+import type { PaginatedResponse } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
 import { useI18n } from '@/lib/providers';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -13,48 +12,77 @@ import { StatCard } from '@/components/data/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, statusVariant } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/data/empty-state';
+import { HelpNotice } from '@/components/help/help-tip';
 
+/** As returned by `GET /finance/overview`. */
 interface Overview {
-  currency: string;
   openDocuments: number;
-  totalBilled: number;
-  totalPaid: number;
-  totalOutstanding: number;
-  overdueAmount: number;
+  totalPayable: number | string;
+  totalPaid: number | string;
+  totalOutstanding: number | string;
+  overdueOutstanding: number | string;
   overdueCount: number;
-  paymentsThisMonth: number;
-  paymentsThisMonthCount: number;
-  reconciliationMismatches: number;
-  partnerBalances: Array<{
-    partnerId: string | null;
+  paymentsThisMonth: number | string;
+  counterpartyBalances: Array<{
     counterpartyId: string | null;
     name: string;
-    total: number;
-    paid: number;
-    outstanding: number;
-  }>;
-  recentPayments: Array<{
-    id: string;
-    reference: string;
-    amount: number | string;
-    currency: string;
-    paymentDate: string;
-    status: string;
-    method: string | null;
-    financialDocument: { id: string; reference: string; counterparty: { name: string } | null } | null;
+    total: number | string;
+    paid: number | string;
+    outstanding: number | string;
   }>;
 }
+
+/** As returned by `GET /payments`. */
+interface PaymentRow {
+  id: string;
+  reference: string;
+  amount: number | string;
+  currency: string;
+  paymentDate: string;
+  status: string;
+  method: string | null;
+  financialDocument: {
+    id: string;
+    reference: string;
+    counterparty: { name: string } | null;
+  } | null;
+}
+
+// Every amount in this system is EGP unless a record says otherwise; the
+// overview aggregates across documents and so carries no single currency.
+const DISPLAY_CURRENCY = 'EGP';
 
 export default function FinanceOverviewPage() {
   const { t, locale } = useI18n();
 
-  const query = useQuery({
+  const overview = useQuery({
     queryKey: ['finance', 'overview'],
     queryFn: () => api.get<Overview>('/finance/overview'),
   });
 
-  const d = query.data;
-  const currency = d?.currency ?? 'EGP';
+  // Recent payments are a separate resource — the overview endpoint does not
+  // carry them, and inventing that it did is what broke this page before.
+  const payments = useQuery({
+    queryKey: ['payments', 'recent'],
+    queryFn: () =>
+      api.get<PaginatedResponse<PaymentRow>>('/payments', {
+        pageSize: 8,
+        sortBy: 'paymentDate',
+        sortDir: 'desc',
+      }),
+  });
+
+  const mismatches = useQuery({
+    queryKey: ['finance', 'reconciliation', 'count'],
+    queryFn: () =>
+      api.get<PaginatedResponse<unknown>>('/finance/reconciliation', { pageSize: 1 }),
+  });
+
+  const d = overview.data;
+  const balances = d?.counterpartyBalances ?? [];
+  const recent = payments.data?.data ?? [];
+  const mismatchCount = mismatches.data?.meta.total ?? 0;
 
   return (
     <>
@@ -74,48 +102,52 @@ export default function FinanceOverviewPage() {
         }
       />
 
+      <HelpNotice noticeKey="notice.outstandingDerived" />
+
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">
         <StatCard
           label={t.finance.totalOpenPayables}
           value={d?.openDocuments ?? 0}
           icon={Receipt}
-          loading={query.isLoading}
+          loading={overview.isLoading}
           href="/finance/payables?onlyOutstanding=true"
         />
         <StatCard
+          label={t.finance.totalAmount}
+          value={formatMoney(d?.totalPayable, DISPLAY_CURRENCY, locale)}
+          icon={Scale}
+          loading={overview.isLoading}
+        />
+        <StatCard
           label={t.finance.totalPaid}
-          value={formatMoney(d?.totalPaid, currency, locale)}
+          value={formatMoney(d?.totalPaid, DISPLAY_CURRENCY, locale)}
           icon={Wallet}
           tone="success"
-          loading={query.isLoading}
+          loading={overview.isLoading}
         />
         <StatCard
           label={t.finance.totalOutstanding}
-          value={formatMoney(d?.totalOutstanding, currency, locale)}
+          value={formatMoney(d?.totalOutstanding, DISPLAY_CURRENCY, locale)}
           icon={TrendingUp}
-          loading={query.isLoading}
+          loading={overview.isLoading}
           href="/finance/payables?onlyOutstanding=true"
         />
         <StatCard
           label={t.finance.overdueAmount}
-          value={formatMoney(d?.overdueAmount, currency, locale)}
+          value={formatMoney(d?.overdueOutstanding, DISPLAY_CURRENCY, locale)}
           icon={AlertTriangle}
-          tone={d && d.overdueAmount > 0 ? 'danger' : 'default'}
-          hint={d && d.overdueCount > 0 ? `${d.overdueCount} ${t.finance.payables.toLowerCase()}` : undefined}
-          loading={query.isLoading}
+          tone={d && Number(d.overdueOutstanding) > 0 ? 'danger' : 'default'}
+          hint={
+            d && d.overdueCount > 0
+              ? `${d.overdueCount} ${t.finance.payables.toLowerCase()}`
+              : undefined
+          }
+          loading={overview.isLoading}
           href="/finance/payables?onlyOverdue=true"
-        />
-        <StatCard
-          label={t.finance.paymentsThisMonth}
-          value={formatMoney(d?.paymentsThisMonth, currency, locale)}
-          icon={Scale}
-          hint={d ? `${d.paymentsThisMonthCount} ${t.nav.payments.toLowerCase()}` : undefined}
-          loading={query.isLoading}
-          href="/finance/payments"
         />
       </div>
 
-      {d && d.reconciliationMismatches > 0 ? (
+      {mismatchCount > 0 ? (
         <Link
           href="/finance/reconciliation"
           className="mt-4 flex items-start gap-2 rounded-md bg-warning-subtle px-3 py-2.5 text-xs text-warning transition-colors hover:brightness-95"
@@ -123,7 +155,7 @@ export default function FinanceOverviewPage() {
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
             <span className="font-medium">
-              {d.reconciliationMismatches} {t.finance.mismatch.toLowerCase()}
+              {mismatchCount} {t.finance.mismatch.toLowerCase()}
             </span>
             <span className="mt-0.5 block opacity-90">{t.finance.reconciliationHint}</span>
           </span>
@@ -136,14 +168,14 @@ export default function FinanceOverviewPage() {
             <CardTitle>{t.finance.partnerBalances}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {query.isLoading ? (
+            {overview.isLoading ? (
               <div className="space-y-2 p-4">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="skeleton h-8 w-full" />
                 ))}
               </div>
-            ) : (d?.partnerBalances.length ?? 0) === 0 ? (
-              <p className="py-10 text-center text-xs text-muted-foreground">{t.common.noResults}</p>
+            ) : balances.length === 0 ? (
+              <EmptyState title={t.common.noResults} description={t.finance.noBalancesHint} />
             ) : (
               <div className="overflow-x-auto">
                 <table className="data-table">
@@ -156,15 +188,17 @@ export default function FinanceOverviewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {d!.partnerBalances.map((p) => (
-                      <tr key={p.counterpartyId ?? p.partnerId ?? p.name}>
-                        <td className="max-w-48 truncate">{p.name}</td>
-                        <td className="text-end tabular-nums">{formatMoney(p.total, currency, locale)}</td>
+                    {balances.map((row) => (
+                      <tr key={row.counterpartyId ?? row.name}>
+                        <td className="max-w-48 truncate">{row.name}</td>
+                        <td className="text-end tabular-nums">
+                          {formatMoney(row.total, DISPLAY_CURRENCY, locale)}
+                        </td>
                         <td className="text-end tabular-nums text-success">
-                          {formatMoney(p.paid, currency, locale)}
+                          {formatMoney(row.paid, DISPLAY_CURRENCY, locale)}
                         </td>
                         <td className="text-end font-medium tabular-nums">
-                          {formatMoney(p.outstanding, currency, locale)}
+                          {formatMoney(row.outstanding, DISPLAY_CURRENCY, locale)}
                         </td>
                       </tr>
                     ))}
@@ -183,25 +217,31 @@ export default function FinanceOverviewPage() {
             </Button>
           </CardHeader>
           <CardContent className="p-0">
-            {query.isLoading ? (
+            {payments.isLoading ? (
               <div className="space-y-2 p-4">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="skeleton h-8 w-full" />
                 ))}
               </div>
-            ) : (d?.recentPayments.length ?? 0) === 0 ? (
-              <p className="py-10 text-center text-xs text-muted-foreground">{t.common.noResults}</p>
+            ) : recent.length === 0 ? (
+              <EmptyState title={t.common.noResults} description={t.finance.noPaymentsHint} />
             ) : (
               <ul className="divide-y">
-                {d!.recentPayments.map((p) => (
+                {recent.map((p) => (
                   <li key={p.id}>
                     <Link
-                      href={p.financialDocument ? `/finance/payables/${p.financialDocument.id}` : '/finance/payments'}
+                      href={
+                        p.financialDocument
+                          ? `/finance/payables/${p.financialDocument.id}`
+                          : '/finance/payments'
+                      }
                       className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-accent/40"
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-xs font-medium">
-                          {p.financialDocument?.counterparty?.name ?? p.financialDocument?.reference ?? p.reference}
+                          {p.financialDocument?.counterparty?.name ??
+                            p.financialDocument?.reference ??
+                            p.reference}
                         </span>
                         <span className="block text-2xs tabular-nums text-muted-foreground">
                           {formatDate(p.paymentDate, locale)}

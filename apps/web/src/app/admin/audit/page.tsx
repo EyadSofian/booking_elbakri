@@ -14,18 +14,36 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
+/** As returned by `GET /audit`. */
 interface AuditRow {
   id: string;
   action: string;
   entityType: string | null;
   entityId: string | null;
-  changedFields: string[];
-  beforeSnapshot: Record<string, unknown> | null;
-  afterSnapshot: Record<string, unknown> | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
   requestId: string | null;
   ipAddress: string | null;
   createdAt: string;
   actor: { id: string; fullName: string; email: string } | null;
+  actorLabel: string | null;
+}
+
+/**
+ * The fields an entry actually changed.
+ *
+ * The API stores the before and after snapshots rather than a field list, so
+ * the difference is derived here — from the data, not from an assumption that
+ * the server sends one.
+ */
+function changedFields(row: AuditRow): string[] {
+  const before = row.before ?? {};
+  const after = row.after ?? {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].filter(
+    (k) => JSON.stringify(before[k as keyof typeof before]) !== JSON.stringify(after[k as keyof typeof after]),
+  );
 }
 
 export default function AuditPage() {
@@ -57,7 +75,9 @@ export default function AuditPage() {
     {
       key: 'actor', header: t.audit.actor, mobile: 'field',
       cell: (row) => (
-        <span className="block max-w-40 truncate">{row.actor?.fullName ?? 'System'}</span>
+        <span className="block max-w-40 truncate">
+          {row.actor?.fullName ?? row.actorLabel ?? 'System'}
+        </span>
       ),
     },
     {
@@ -75,17 +95,20 @@ export default function AuditPage() {
     },
     {
       key: 'changedFields', header: t.audit.changedFields,
-      cell: (row) =>
-        row.changedFields?.length ? (
+      cell: (row) => {
+        const fields = changedFields(row);
+        if (!fields.length) return <span className="text-muted-foreground">—</span>;
+        return (
           <span className="flex flex-wrap gap-1">
-            {row.changedFields.slice(0, 4).map((f) => (
+            {fields.slice(0, 4).map((f) => (
               <Badge key={f} variant="default" className="font-mono">{f}</Badge>
             ))}
-            {row.changedFields.length > 4 ? (
-              <span className="text-2xs text-muted-foreground">+{row.changedFields.length - 4}</span>
+            {fields.length > 4 ? (
+              <span className="text-2xs text-muted-foreground">+{fields.length - 4}</span>
             ) : null}
           </span>
-        ) : <span className="text-muted-foreground">—</span>,
+        );
+      },
     },
     {
       key: 'expand', header: '', mobile: 'hidden',
@@ -173,7 +196,7 @@ export default function AuditPage() {
                 {t.audit.before}
               </p>
               <pre className="max-h-64 overflow-auto rounded bg-surface-muted p-2 text-2xs" dir="ltr">
-                {JSON.stringify(openRow.beforeSnapshot ?? {}, null, 2)}
+                {JSON.stringify(openRow.before ?? {}, null, 2)}
               </pre>
             </div>
             <div>
@@ -181,7 +204,7 @@ export default function AuditPage() {
                 {t.audit.after}
               </p>
               <pre className="max-h-64 overflow-auto rounded bg-surface-muted p-2 text-2xs" dir="ltr">
-                {JSON.stringify(openRow.afterSnapshot ?? {}, null, 2)}
+                {JSON.stringify(openRow.after ?? {}, null, 2)}
               </pre>
             </div>
           </div>

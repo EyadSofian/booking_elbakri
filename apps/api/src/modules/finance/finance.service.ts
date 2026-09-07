@@ -603,6 +603,19 @@ export class FinanceService {
       this.prisma.financialDocument.count({ where }),
     ]);
 
+    // The reconciliation issue raised at import time, so a finance user can
+    // resolve the mismatch from this screen rather than hunting for it in
+    // Data Quality.
+    const issues = await this.prisma.dataQualityIssue.findMany({
+      where: {
+        category: 'FINANCIAL_RECONCILIATION_MISMATCH',
+        entityType: 'FinancialDocument',
+        entityId: { in: rows.map((r) => r.id) },
+      },
+      select: { id: true, entityId: true, status: true, resolutionNotes: true },
+    });
+    const issueByDocument = new Map(issues.map((i) => [i.entityId, i]));
+
     const data = rows.map((doc) => {
       const payments = doc.payments.map((p) => ({
         amount: num(p.amount),
@@ -632,6 +645,7 @@ export class FinanceService {
         reason: reconciliation.reason,
         source: doc.legacySource,
         importRun: doc.importRun,
+        issue: issueByDocument.get(doc.id) ?? null,
       };
     });
 

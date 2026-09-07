@@ -20,21 +20,24 @@ import {
   Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 
+/** As returned by `GET /finance/reconciliation`. */
 interface ReconRow {
   id: string;
   reference: string;
-  currency: string;
+  currency?: string;
   counterparty: { id: string; name: string } | null;
+  serviceDescription: string | null;
   legacyTotalRaw: string | null;
   legacyPaidRaw: string | null;
   legacyRestRaw: string | null;
-  totalAmount: number | string;
-  paidAmount: number | string;
-  canonicalOutstanding: number;
-  difference: number | null;
+  legacyStatusRaw: string | null;
+  calculatedOutstanding: number | string;
+  difference: number | string | null;
+  mismatch: boolean;
   restLooksLikeSum: boolean;
   reason: string | null;
-  legacySource: { workbook?: string; sheet?: string; row?: number } | null;
+  importRun: { id: string; sourceFilename: string } | null;
+  /** The data-quality issue raised for this mismatch, when one exists. */
   issue: { id: string; status: string; resolutionNotes: string | null } | null;
 }
 
@@ -79,7 +82,11 @@ export default function ReconciliationPage() {
     },
     {
       key: 'counterparty', header: t.finance.counterparty, mobile: 'subtitle',
-      cell: (row) => <span className="block max-w-48 truncate">{row.counterparty?.name ?? '—'}</span>,
+      cell: (row) => (
+        <span className="block max-w-48 truncate">
+          {row.counterparty?.name ?? row.serviceDescription ?? '—'}
+        </span>
+      ),
     },
     // The legacy figures are shown exactly as the workbook recorded them.
     {
@@ -98,7 +105,7 @@ export default function ReconciliationPage() {
       key: 'calculated', header: t.finance.calculatedOutstanding,
       cell: (row) => (
         <span className="font-medium tabular-nums">
-          {formatMoney(row.canonicalOutstanding, row.currency, locale)}
+          {formatMoney(row.calculatedOutstanding, row.currency ?? 'EGP', locale)}
         </span>
       ),
     },
@@ -109,7 +116,7 @@ export default function ReconciliationPage() {
           <span className="text-muted-foreground">—</span>
         ) : (
           <span className="font-medium tabular-nums text-warning">
-            {formatMoney(row.difference, row.currency, locale)}
+            {formatMoney(row.difference, row.currency ?? 'EGP', locale)}
           </span>
         ),
     },
@@ -125,11 +132,11 @@ export default function ReconciliationPage() {
     {
       key: 'source', header: t.common.source, defaultHidden: true,
       cell: (row) =>
-        row.legacySource?.sheet ? (
-          <span className="text-2xs text-muted-foreground">
-            {row.legacySource.sheet} · {row.legacySource.row}
+        row.importRun ? (
+          <span className="block max-w-40 truncate text-2xs text-muted-foreground">
+            {row.importRun.sourceFilename}
           </span>
-        ) : '—',
+        ) : <span className="text-muted-foreground">—</span>,
     },
     {
       key: 'status', header: t.common.status, mobile: 'hidden',
@@ -211,7 +218,7 @@ export default function ReconciliationPage() {
                   <div>
                     <dt className="text-muted-foreground">{t.finance.calculatedOutstanding}</dt>
                     <dd className="font-medium tabular-nums">
-                      {formatMoney(resolving.canonicalOutstanding, resolving.currency, locale)}
+                      {formatMoney(resolving.calculatedOutstanding, resolving.currency ?? 'EGP', locale)}
                     </dd>
                   </div>
                 </dl>
