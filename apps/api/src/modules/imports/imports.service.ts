@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
@@ -38,7 +38,7 @@ function chunked<T>(items: T[], size: number): T[][] {
 }
 
 @Injectable()
-export class ImportsService {
+export class ImportsService implements OnModuleInit {
   private readonly logger = new Logger(ImportsService.name);
 
   constructor(
@@ -50,6 +50,34 @@ export class ImportsService {
     private readonly dataQuality: DataQualityService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Releases imports left mid-flight by a process that died.
+   *
+   * An apply runs in a single transaction, so if the process holding it goes
+   * away the database rolls the work back — but the run row still says
+   * APPLYING and the UI shows it as in progress forever. On start-up any such
+   * run is marked failed so it can be retried, which is the truthful state:
+   * nothing was written.
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const { count } = await this.prisma.importRun.updateMany({
+        where: { status: ImportRunStatus.APPLYING },
+        data: {
+          status: ImportRunStatus.FAILED,
+          failedReason:
+            'The process applying this import stopped before it finished. The transaction was rolled back, so nothing was written. Re-analyse the workbook to try again.',
+        },
+      });
+      if (count > 0) {
+        this.logger.warn(`Marked ${count} interrupted import run(s) as failed`);
+      }
+    } catch (err) {
+      // Never block start-up on housekeeping.
+      this.logger.error({ err }, 'Could not reconcile interrupted import runs');
+    }
+  }
 
   /**
    * Stores the workbook and runs the analysis.
