@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
-  buildPaginationMeta, matchTraveler, normalizeForSearch, parseLegacyPhone,
-  type PaginatedResponse, type TravelerCandidate,
+  PERMISSIONS, buildPaginationMeta, calculateMargin, matchTraveler, normalizeForSearch, parseLegacyPhone, type PaginatedResponse, type TravelerCandidate,
 } from '@elbakri/shared';
 import { PrismaService } from '../../common/services/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -48,7 +47,18 @@ export class TravelersService {
     return { data, meta: buildPaginationMeta(query.page, query.pageSize, total) };
   }
 
-  async findOne(id: string): Promise<unknown> {
+  /**
+   * A traveller with everything they have booked.
+   *
+   * The services are fetched alongside the person because the point of this
+   * screen is the whole picture — "what has this customer got with us?" — which
+   * is otherwise four separate lookups.
+   *
+   * Visa amounts are omitted unless the caller holds the visa finance
+   * permission. They are left out of the response entirely, not merely hidden
+   * by the client.
+   */
+  async findOne(id: string, permissions: string[] = []): Promise<unknown> {
     const traveler = await this.prisma.traveler.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -61,13 +71,115 @@ export class TravelersService {
             id: true, reference: true, status: true,
             travelStartDate: true, travelEndDate: true,
             partner: { select: { id: true, name: true } },
+            _count: {
+              select: {
+                hotelBookings: true, transferBookings: true,
+                excursionBookings: true, visaOrders: true,
+              },
+            },
           },
         },
         importRun: { select: { id: true, sourceFilename: true } },
       },
     });
     if (!traveler) throw new NotFoundError('Traveler', id);
-    return traveler;
+
+    const tripIds = traveler.tripsAsLead.map((t) => t.id);
+    const scope = { tripFileId: { in: tripIds }, deletedAt: null };
+
+    const [hotelBookings, transferBookings, excursionBookings, visaOrders] = tripIds.length
+      ? await Promise.all([
+          this.prisma.hotelBooking.findMany({
+            where: scope,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true, reference: true, status: true, hotelRaw: true,
+              hotel: { select: { id: true, name: true } },
+              tripFile: { select: { id: true, reference: true } },
+              staySegments: {
+                orderBy: { sequence: 'asc' },
+                select: {
+                  id: true, checkIn: true, checkOut: true, nights: true,
+                  checkInRaw: true, checkOutRaw: true,
+                  hotel: { select: { name: true } }, hotelRaw: true,
+                },
+              },
+            },
+          }),
+          this.prisma.transferBooking.findMany({
+            where: scope,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true, reference: true, status: true, paxCount: true,
+              tripFile: { select: { id: true, reference: true } },
+              legs: {
+                orderBy: { sequence: 'asc' },
+                select: {
+                  id: true, direction: true, status: true, serviceDate: true,
+                  pickupTimeMinutes: true, pickupTimeRaw: true, flightNumber: true,
+                  fromRaw: true, toRaw: true,
+                  fromLocation: { select: { name: true } },
+                  toLocation: { select: { name: true } },
+                },
+              },
+            },
+          }),
+          this.prisma.excursionBooking.findMany({
+            where: scope,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true, reference: true, status: true, paxCount: true, childCount: true,
+              hotelRaw: true, hotel: { select: { name: true } },
+              tripFile: { select: { id: true, reference: true } },
+              items: {
+                orderBy: { sequence: 'asc' },
+                select: {
+                  id: true, status: true, serviceDate: true, activityRaw: true,
+                  catalogItem: { select: { name: true, nameAr: true } },
+                },
+              },
+            },
+          }),
+          this.prisma.visaOrder.findMany({
+            where: scope,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true, reference: true, status: true, originRaw: true,
+              destinationRaw: true, paxCount: true, serviceDate: true,
+              currency: true, netAmount: true, sellAmount: true,
+              tripFile: { select: { id: true, reference: true } },
+            },
+          }),
+        ])
+      : [[], [], [], []];
+
+    const canSeeVisaFinance =
+      permissions.includes(PERMISSIONS.VISAS_FINANCE_READ) ||
+      permissions.includes(PERMISSIONS.FINANCE_READ);
+
+    const visas = (visaOrders as Array<Record<string, unknown>>).map((order) => {
+      if (!canSeeVisaFinance) {
+        const { netAmount: _n, sellAmount: _s, ...rest } = order;
+        return { ...rest, netAmount: null, sellAmount: null, margin: null };
+      }
+      const net = order.netAmount === null ? null : Number(order.netAmount);
+      const sell = order.sellAmount === null ? null : Number(order.sellAmount);
+      return {
+        ...order,
+        netAmount: net,
+        sellAmount: sell,
+        // Derived on read, exactly as the visas module does it.
+        margin: calculateMargin(sell, net),
+      };
+    });
+
+    return {
+      ...traveler,
+      hotelBookings,
+      transferBookings,
+      excursionBookings,
+      visaOrders: visas,
+    };
   }
 
   async create(

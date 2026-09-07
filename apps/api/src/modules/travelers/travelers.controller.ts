@@ -60,8 +60,9 @@ export class TravelersController {
 
   @Get(':id')
   @RequirePermissions(PERMISSIONS.TRAVELERS_READ)
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.travelers.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentActor() actor: AuthenticatedActor) {
+    // Permissions decide server-side which fields are returned at all.
+    return this.travelers.findOne(id, actor.permissions);
   }
 
   @Get(':id/duplicates')

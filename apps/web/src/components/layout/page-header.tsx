@@ -1,18 +1,25 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { PageGuideButton } from '@/components/help/page-guide';
 
-/** Consistent page heading: title, optional description, and actions. */
+/**
+ * Consistent page heading: title, description, actions, and — where the screen
+ * has a guide registered — the help control that explains it.
+ */
 export function PageHeader({
   title,
   description,
   actions,
   breadcrumb,
+  guideKey,
   className,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   breadcrumb?: ReactNode;
+  /** Key into the help registry; renders the page guide button when present. */
+  guideKey?: string;
   className?: string;
 }) {
   return (
@@ -25,7 +32,10 @@ export function PageHeader({
             <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
           ) : null}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {actions}
+          {guideKey ? <PageGuideButton guideKey={guideKey} /> : null}
+        </div>
       </div>
     </div>
   );
