@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req } 
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsArray, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested,
+  IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested,
 } from 'class-validator';
 import type { Request } from 'express';
 import { PERMISSIONS, VisaStatus } from '@elbakri/shared';
@@ -31,6 +31,27 @@ class CreateVisaDto {
   @IsString() @MaxLength(3) @IsOptional() currency?: string;
   @IsString() @MaxLength(4000) @IsOptional() notes?: string;
   @IsArray() @ValidateNested({ each: true }) @Type(() => ApplicantDto) @IsOptional() applicants?: ApplicantDto[];
+}
+
+/** See the note in transfers.controller.ts on why these are classes. */
+class UpdateVisaDto {
+  @IsUUID() @IsOptional() leadTravelerId?: string;
+  @IsUUID() @IsOptional() partnerId?: string;
+  @IsString() @MaxLength(200) @IsOptional() originRaw?: string;
+  @IsString() @MaxLength(200) @IsOptional() destinationRaw?: string;
+  @Type(() => Number) @IsInt() @Min(0) @IsOptional() paxCount?: number;
+  @IsDateString() @IsOptional() serviceDate?: string;
+  @Type(() => Number) @IsNumber() @Min(0) @IsOptional() netAmount?: number;
+  @Type(() => Number) @IsNumber() @Min(0) @IsOptional() sellAmount?: number;
+  @IsString() @MaxLength(3) @IsOptional() currency?: string;
+  @IsString() @MaxLength(4000) @IsOptional() notes?: string;
+  @Type(() => Number) @IsInt() @IsOptional() version?: number;
+}
+
+class UpdateApplicantDto extends ApplicantDto {
+  @IsString() @MaxLength(40) @IsOptional() status?: string;
+  @IsBoolean() @IsOptional() documentsComplete?: boolean;
+  @IsString() @MaxLength(2000) @IsOptional() notes?: string;
 }
 
 class VisaListDto extends ListQueryDto {
@@ -105,7 +126,7 @@ export class VisasController {
   @RequirePermissions(PERMISSIONS.VISAS_UPDATE)
   update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: Partial<CreateVisaDto> & { version?: number },
+    @Body() dto: UpdateVisaDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {
@@ -165,7 +186,7 @@ export class VisasController {
   @RequirePermissions(PERMISSIONS.VISAS_UPDATE)
   updateApplicant(
     @Param('applicantId', ParseUUIDPipe) applicantId: string,
-    @Body() dto: Partial<ApplicantDto> & { status?: string; documentsComplete?: boolean; notes?: string },
+    @Body() dto: UpdateApplicantDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {

@@ -26,6 +26,19 @@ class CreateTravelerDto {
   @IsString() @MaxLength(4000) @IsOptional() notes?: string;
 }
 
+/** See the note in transfers.controller.ts on why this is a class. */
+class UpdateTravelerDto {
+  @IsString() @MaxLength(200) @IsOptional() fullName?: string;
+  @IsString() @MaxLength(200) @IsOptional() fullNameAr?: string;
+  @IsString() @MaxLength(60) @IsOptional() phone?: string;
+  @IsString() @MaxLength(200) @IsOptional() email?: string;
+  @IsUUID() @IsOptional() nationalityId?: string;
+  @IsString() @MaxLength(120) @IsOptional() nationalityRaw?: string;
+  @IsString() @MaxLength(60) @IsOptional() passportNumber?: string;
+  @IsUUID() @IsOptional() partnerId?: string;
+  @IsString() @MaxLength(4000) @IsOptional() notes?: string;
+}
+
 class MergeDto {
   @IsUUID() duplicateId!: string;
 }
@@ -68,7 +81,7 @@ export class TravelersController {
   @RequirePermissions(PERMISSIONS.TRAVELERS_UPDATE)
   update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: Partial<CreateTravelerDto>,
+    @Body() dto: UpdateTravelerDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {

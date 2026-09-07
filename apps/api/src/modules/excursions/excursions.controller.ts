@@ -37,6 +37,22 @@ class CreateExcursionDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => ItemDto) items!: ItemDto[];
 }
 
+/** See the note in transfers.controller.ts on why these are classes. */
+class UpdateExcursionDto {
+  @IsUUID() @IsOptional() leadTravelerId?: string;
+  @IsUUID() @IsOptional() partnerId?: string;
+  @IsUUID() @IsOptional() hotelId?: string;
+  @IsString() @MaxLength(200) @IsOptional() hotelRaw?: string;
+  @Type(() => Number) @IsInt() @Min(0) @IsOptional() paxCount?: number;
+  @Type(() => Number) @IsInt() @Min(0) @IsOptional() childCount?: number;
+  @IsString() @MaxLength(4000) @IsOptional() notes?: string;
+  @Type(() => Number) @IsInt() @IsOptional() version?: number;
+}
+
+class UpdateItemDto extends ItemDto {
+  @Type(() => Number) @IsInt() @IsOptional() version?: number;
+}
+
 class ExcursionListDto extends ListQueryDto {
   @IsUUID() @IsOptional() hotelId?: string;
   @IsUUID() @IsOptional() partnerId?: string;
@@ -126,7 +142,7 @@ export class ExcursionsController {
   @RequirePermissions(PERMISSIONS.EXCURSIONS_UPDATE)
   update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: Partial<CreateExcursionDto> & { version?: number },
+    @Body() dto: UpdateExcursionDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {
@@ -162,7 +178,7 @@ export class ExcursionsController {
   @RequirePermissions(PERMISSIONS.EXCURSIONS_UPDATE)
   updateItem(
     @Param('itemId', ParseUUIDPipe) itemId: string,
-    @Body() dto: Partial<ItemDto> & { version?: number },
+    @Body() dto: UpdateItemDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {

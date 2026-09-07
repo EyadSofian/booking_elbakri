@@ -51,6 +51,44 @@ class LegListDto extends ListQueryDto {
   @Transform(toBoolean) @IsBoolean() @IsOptional() missingPickupOnly?: boolean;
 }
 
+/**
+ * Update DTOs are declared as classes, not `Partial<X> & {...}`.
+ *
+ * An intersection or mapped type erases the class metadata Nest needs, so the
+ * ValidationPipe skips the payload entirely: nothing is validated, unknown
+ * fields are not stripped, and `@Type(() => Number)` never runs — which is how
+ * a page size arrives as the string "1" and reaches Prisma as `take: "1"`.
+ */
+class TransferBookingListDto extends ListQueryDto {
+  @IsUUID() @IsOptional() partnerId?: string;
+  @IsUUID() @IsOptional() tripFileId?: string;
+}
+
+class UpdateTransferDto {
+  @IsUUID() @IsOptional() leadTravelerId?: string;
+  @IsUUID() @IsOptional() partnerId?: string;
+  @Type(() => Number) @IsInt() @Min(0) @IsOptional() paxCount?: number;
+  @IsString() @MaxLength(4000) @IsOptional() notes?: string;
+  @Type(() => Number) @IsInt() @IsOptional() version?: number;
+}
+
+class UpdateLegDto {
+  @IsIn(Object.values(TransferDirection)) @IsOptional() direction?: string;
+  @IsUUID() @IsOptional() fromLocationId?: string;
+  @IsString() @MaxLength(200) @IsOptional() fromRaw?: string;
+  @IsUUID() @IsOptional() toLocationId?: string;
+  @IsString() @MaxLength(200) @IsOptional() toRaw?: string;
+  @IsDateString() @IsOptional() serviceDate?: string;
+  @Type(() => Number) @IsInt() @Min(0) @Max(1439) @IsOptional() pickupTimeMinutes?: number;
+  @IsString() @MaxLength(40) @IsOptional() flightNumber?: string;
+  @Type(() => Number) @IsInt() @Min(0) @IsOptional() paxCount?: number;
+  @IsBoolean() @IsOptional() meetAndGreet?: boolean;
+  @IsBoolean() @IsOptional() flowerBouquet?: boolean;
+  @IsBoolean() @IsOptional() securityApprovalRequired?: boolean;
+  @IsString() @MaxLength(2000) @IsOptional() notes?: string;
+  @Type(() => Number) @IsInt() @IsOptional() version?: number;
+}
+
 class AssignDto {
   @IsUUID() @IsOptional() driverId?: string | null;
   @IsUUID() @IsOptional() vehicleId?: string | null;
@@ -93,7 +131,7 @@ export class TransfersController {
   @Get()
   @RequirePermissions(PERMISSIONS.TRANSFERS_READ)
   @ApiOperation({ summary: 'List transfer bookings' })
-  listBookings(@Query() query: ListQueryDto & { partnerId?: string; tripFileId?: string }) {
+  listBookings(@Query() query: TransferBookingListDto) {
     return this.transfers.listBookings({
       page: query.page, pageSize: query.pageSize, q: query.q, status: query.status,
       partnerId: query.partnerId, tripFileId: query.tripFileId,
@@ -140,7 +178,7 @@ export class TransfersController {
   @RequirePermissions(PERMISSIONS.TRANSFERS_UPDATE)
   update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: Partial<CreateTransferDto> & { version?: number },
+    @Body() dto: UpdateTransferDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {
@@ -173,7 +211,7 @@ export class TransfersController {
   @RequirePermissions(PERMISSIONS.TRANSFERS_UPDATE)
   updateLeg(
     @Param('legId', ParseUUIDPipe) legId: string,
-    @Body() dto: Partial<LegDto> & { version?: number },
+    @Body() dto: UpdateLegDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {

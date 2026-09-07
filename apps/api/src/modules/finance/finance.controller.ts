@@ -34,6 +34,22 @@ class CreateDocumentDto {
   @IsString() @MaxLength(4000) @IsOptional() notes?: string;
 }
 
+/** See the note in transfers.controller.ts on why these are classes. */
+class SettlementListDto extends PaginationDto {
+  @IsUUID() @IsOptional() partnerId?: string;
+  @IsString() @MaxLength(30) @IsOptional() status?: string;
+}
+
+class UpdateDocumentDto {
+  @IsUUID() @IsOptional() counterpartyId?: string;
+  @IsString() @MaxLength(500) @IsOptional() serviceDescription?: string;
+  @Type(() => Number) @IsNumber() @Min(0) @IsOptional() totalAmount?: number;
+  @IsDateString() @IsOptional() dueDate?: string;
+  @IsDateString() @IsOptional() serviceDate?: string;
+  @IsString() @MaxLength(4000) @IsOptional() notes?: string;
+  @Type(() => Number) @IsInt() @IsOptional() version?: number;
+}
+
 class RecordPaymentDto {
   @Type(() => Number) @IsNumber() @Min(0.01) amount!: number;
   @IsDateString() paymentDate!: string;
@@ -123,7 +139,7 @@ export class FinanceController {
   @RequirePermissions(PERMISSIONS.FINANCE_DOCUMENTS_MANAGE)
   updateDocument(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: Partial<CreateDocumentDto> & { version?: number },
+    @Body() dto: UpdateDocumentDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {
@@ -190,7 +206,7 @@ export class FinanceController {
 
   @Get('settlements')
   @RequirePermissions(PERMISSIONS.FINANCE_READ)
-  listSettlements(@Query() query: PaginationDto & { partnerId?: string; status?: string }) {
+  listSettlements(@Query() query: SettlementListDto) {
     return this.finance.listSettlements({
       page: query.page, pageSize: query.pageSize,
       partnerId: query.partnerId, status: query.status,

@@ -33,6 +33,17 @@ class SegmentDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => RoomDto) @IsOptional() rooms?: RoomDto[];
 }
 
+/** See the note in transfers.controller.ts on why this is a class. */
+class UpdateSegmentDto {
+  @IsUUID() @IsOptional() hotelId?: string;
+  @IsString() @MaxLength(200) @IsOptional() hotelRaw?: string;
+  @IsDateString() @IsOptional() checkIn?: string;
+  @IsDateString() @IsOptional() checkOut?: string;
+  @IsUUID() @IsOptional() mealPlanId?: string;
+  @IsString() @MaxLength(120) @IsOptional() mealPlanRaw?: string;
+  @IsString() @MaxLength(2000) @IsOptional() notes?: string;
+}
+
 class HotelBookingListDto extends ListQueryDto {
   @IsUUID() @IsOptional() hotelId?: string;
   @IsUUID() @IsOptional() partnerId?: string;
@@ -190,7 +201,7 @@ export class HotelBookingsController {
   @RequirePermissions(PERMISSIONS.HOTELS_UPDATE)
   updateSegment(
     @Param('segmentId', ParseUUIDPipe) segmentId: string,
-    @Body() dto: Partial<SegmentDto>,
+    @Body() dto: UpdateSegmentDto,
     @CurrentActor() actor: AuthenticatedActor,
     @Req() req: Request,
   ) {

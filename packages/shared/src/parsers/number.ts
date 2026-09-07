@@ -16,12 +16,29 @@ const EMPTY: ParsedCount = {
   status: ParseStatus.MISSING, confidence: 0, warnings: [],
 };
 
+/**
+ * Largest plausible passenger or child count on one booking.
+ *
+ * The legacy sheets have rows where the columns were typed one across, so a
+ * phone number lands in PAXS. Without a ceiling that is accepted as a count and
+ * then fails at the database as an integer overflow — after the parser has
+ * already reported the row as fine.
+ */
+export const MAX_PLAUSIBLE_COUNT = 999;
+
 /** Parse a passenger / child count cell, preserving any qualifying text. */
-export function parseLegacyCount(input: unknown): ParsedCount {
+export function parseLegacyCount(input: unknown, max = MAX_PLAUSIBLE_COUNT): ParsedCount {
   if (input === null || input === undefined || input === '') return EMPTY;
 
   if (typeof input === 'number') {
     if (!Number.isFinite(input)) return { ...EMPTY, raw: String(input), status: ParseStatus.UNPARSEABLE };
+    if (Math.abs(input) > max) {
+      return {
+        raw: String(input), value: null, residualNote: null,
+        status: ParseStatus.UNPARSEABLE, confidence: 0,
+        warnings: ['IMPLAUSIBLE_COUNT'],
+      };
+    }
     const isWhole = Number.isInteger(input);
     return {
       raw: String(input), value: isWhole ? input : Math.round(input), residualNote: null,
@@ -49,8 +66,16 @@ export function parseLegacyCount(input: unknown): ParsedCount {
     return { raw, value: null, residualNote: residual, status: ParseStatus.UNPARSEABLE, confidence: 0, warnings: ['NO_NUMERIC_VALUE'] };
   }
   if (nums.length === 1) {
+    const value = Number(nums[0]);
+    if (value > max) {
+      return {
+        raw, value: null, residualNote: residual,
+        status: ParseStatus.UNPARSEABLE, confidence: 0,
+        warnings: ['IMPLAUSIBLE_COUNT'],
+      };
+    }
     return {
-      raw, value: Number(nums[0]), residualNote: residual,
+      raw, value, residualNote: residual,
       status: residual ? ParseStatus.AMBIGUOUS : ParseStatus.PARSED,
       confidence: residual ? 0.75 : 0.95,
       warnings: residual ? ['QUALIFYING_TEXT_WITH_COUNT'] : [],
@@ -58,8 +83,15 @@ export function parseLegacyCount(input: unknown): ParsedCount {
   }
   // "2 + 1" style entries are summed, but the components stay visible via raw.
   if (/\+/.test(ascii)) {
+    const sum = nums.reduce((total, n) => total + Number(n), 0);
+    if (sum > max) {
+      return {
+        raw, value: null, residualNote: residual,
+        status: ParseStatus.UNPARSEABLE, confidence: 0, warnings: ['IMPLAUSIBLE_COUNT'],
+      };
+    }
     return {
-      raw, value: nums.reduce((sum, n) => sum + Number(n), 0), residualNote: residual,
+      raw, value: sum, residualNote: residual,
       status: ParseStatus.AMBIGUOUS, confidence: 0.6, warnings: ['SUM_OF_MULTIPLE_COUNTS'],
     };
   }
