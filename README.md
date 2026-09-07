@@ -92,6 +92,14 @@ text, produces a null value, and raises an issue someone can act on.
 than half the transfer and excursion rows. Read naively, a customer's return
 journey becomes an anonymous second traveller.
 
+**Matching asks rather than guesses.** Only an exact name or an approved alias
+resolves automatically. A wrong merge silently moves one company's bookings onto
+another; a duplicate is visible and reversible.
+
+**Hotel pricing never crosses the boundary.** Hotel identity and description
+synchronise from the ELBAKRI Rate Hub; rates stay there. The allowlist is
+enforced on both sides and tested from both directions.
+
 ---
 
 ## Requirements
@@ -170,6 +178,17 @@ incomplete, so a missing secret fails loudly rather than at the first request.
 | --- | :---: | --- |
 | `NEXT_PUBLIC_API_URL` | yes | Baked into the client bundle at build time |
 
+### Hotel directory integration (API only)
+
+| Variable | Required | Notes |
+| --- | :---: | --- |
+| `ELBAKRI_RATE_API_URL` | no | The Rate Hub base URL |
+| `ELBAKRI_RATE_INTEGRATION_KEY` | no | Server-to-server key. **Never** `NEXT_PUBLIC_*` |
+
+Server-to-server only — the browser never calls the Rate Hub. Without these the
+hotel catalogue still works; only synchronisation is unavailable, and the sync
+button says so.
+
 ---
 
 ## Database
@@ -226,8 +245,11 @@ Re-uploading an already-applied workbook is refused by SHA-256 checksum.
 
 ```bash
 npm test                      # shared + API
-npm run test:shared           # 129 unit tests, no database needed
-npm run test:api
+npm run test:shared           # 147 unit tests, no database needed
+npm run test:api              #  23 — directory boundary, hotel sync
+npm run test:e2e -w @elbakri/web   # navigation audit, en/ar x desktop/mobile
+
+python3 scripts/audit-navigation.py   # every internal link resolves
 ```
 
 The parser tests use the **actual values from the supplied workbooks** —
@@ -302,6 +324,7 @@ point-in-time recovery enabled.
 | `docs/G-RBAC.md` | Permissions, roles and their enforcement |
 | `docs/H-UI-ROUTES.md` | Screens, navigation and i18n |
 | `docs/I-DEPLOYMENT.md` | Deployment and operations |
+| `docs/J-TABS-HELP-AND-INTEGRATION.md` | Tab architecture, contextual help, matching, hotel directory |
 
 Interactive API documentation is served at `/api/docs` when
 `SWAGGER_ENABLED=true`.

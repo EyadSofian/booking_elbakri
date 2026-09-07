@@ -3,7 +3,7 @@
 Versioned REST at `/api/v1`. Interactive documentation at
 [`/api/docs`](https://elbakri-api-production.up.railway.app/api/docs).
 
-**124 endpoints across 21 controllers.** The route tables below are generated
+**127 endpoints across 22 controllers.** The route tables below are generated
 from the controller sources by `scripts/gen-api-docs.py`, so the permission
 listed against each route is the one the code actually enforces — the document
 cannot drift from the guard.
@@ -290,6 +290,7 @@ returns `RATE_LIMITED`.
 | --- | --- | --- | --- |
 | GET | `/api/v1/partners` | `master_data.read` |  |
 | POST | `/api/v1/partners` | `master_data.manage` |  |
+| GET | `/api/v1/hotels/:id` | `master_data.read` | One hotel with its aliases, usage and sync state |
 | GET | `/api/v1/hotels` | `master_data.read` |  |
 | POST | `/api/v1/hotels` | `master_data.manage` |  |
 | GET | `/api/v1/room-types` | `master_data.read` |  |
@@ -306,6 +307,13 @@ returns `RATE_LIMITED`.
 | POST | `/api/v1/alias-suggestions/:id/promote` | `master_data.manage` | Create a new master record from an unresolved value |
 | POST | `/api/v1/alias-suggestions/:id/reject` | `master_data.manage` |  |
 | POST | `/api/v1/aliases` | `master_data.manage` | Add an alias to a master record by hand |
+
+### Hotel directory
+
+| Method | Path | Permission | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/v1/hotel-directory/status` | `master_data.read` | Configuration and the outcome of the last synchronisation |
+| POST | `/api/v1/hotel-directory/sync` | `hotels.sync` | Pull the hotel directory from the Rate Hub |
 
 ### Imports
 
@@ -384,6 +392,7 @@ returns `RATE_LIMITED`.
 | --- | --- | --- | --- |
 | GET | `/api/v1/settings` | `settings.manage` |  |
 | PUT | `/api/v1/settings/:key` | `settings.manage` |  |
+
 ---
 
 ## Worked examples

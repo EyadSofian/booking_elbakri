@@ -37,6 +37,7 @@ Master Data
 
 Data
   Import Center           /imports
+  Matching                /matching
   Data Quality            /data-quality
   Reports / Export        /reports
 
@@ -72,9 +73,19 @@ excursions), with timeline and table views. Rows show what is *not* ready:
 a missing pickup time, an unassigned driver, a security approval.
 
 **Trip Files** — the list, then the detail: tabs for overview, travellers,
-hotels, transfers, excursions, visa, finance, attachments and timeline. The
-overview builds a day-by-day timeline **from the actual child services**, so it
-reflects what is really booked rather than a stored copy that could drift.
+hotels, transfers, excursions, visa, finance, attachments and timeline, each
+URL-backed (`?tab=hotels`) so a refresh, a shared link and the Back button all
+land on the same place. The overview builds a day-by-day timeline **from the
+actual child services**, so it reflects what is really booked rather than a
+stored copy that could drift.
+
+**Travellers** — the list, then a detail page with the same tab architecture:
+every trip file, hotel stay, transfer, excursion and visa for one person. Visa
+amounts are omitted from the response without the visa finance permission.
+
+**Matching** — values the importer could not resolve, with four decisions: link
+to the suggestion, choose a different record, create as new, or reject. See
+`docs/J-TABS-HELP-AND-INTEGRATION.md`.
 
 Where a record came from an import, the source workbook, sheet and row are shown
 at the top.
@@ -84,7 +95,10 @@ vehicle, or move a leg through the workflow, without leaving the row. Legs with
 an unreadable pickup time show the original text in warning colour rather than a
 blank or an invented time.
 
-**Import Center** — upload, then the reconciliation stated plainly at the top:
+**Import Center** — seven URL-backed workflow tabs: overview, file, mapping,
+matching, issues, preview and reconciliation. Each is a real stage, and a stage
+that cannot be used yet renders disabled *with the reason*. The reconciliation
+is stated plainly at the top:
 *every scanned row is accounted for*, or *rows are unaccounted for — review
 before applying*. Per-sheet figures, the detected column mapping, unmapped
 columns, and the issue list. Applying is a deliberate second step behind a
@@ -97,6 +111,14 @@ they disagree.
 
 **Data Quality** — the issue queue, filterable and assignable. Closing an issue
 as ignored requires a reason.
+
+## Tabs and contextual help
+
+Tabs are URL-backed and declared in a registry that carries the label,
+permission, count and help for each — so the tab bar, the permission check and
+the help text cannot drift apart. Contextual help has three levels (field
+tooltip, page guide, inline notice), all keyboard-operable rather than
+hover-only. Full detail in `docs/J-TABS-HELP-AND-INTEGRATION.md`.
 
 ## Command palette
 
