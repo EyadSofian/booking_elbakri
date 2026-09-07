@@ -22,6 +22,14 @@ export interface UploadResult {
   duplicateOf?: string;
 }
 
+/**
+ * Ceiling for the apply transaction. Overridable for unusually large
+ * migrations via IMPORT_APPLY_TIMEOUT_MS.
+ */
+const APPLY_TRANSACTION_TIMEOUT_MS = Number(
+  process.env.IMPORT_APPLY_TIMEOUT_MS ?? 20 * 60_000,
+);
+
 /** Splits an array into fixed-size batches for bulk inserts. */
 function chunked<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -309,7 +317,11 @@ export class ImportsService {
             },
           });
         },
-        { timeout: 300_000, maxWait: 30_000 },
+        // A migration is a long, deliberate operation and it must stay atomic:
+        // a partial import leaving half a booking behind is worse than none.
+        // Deployed beside the database this completes in seconds; the generous
+        // ceiling is for large workbooks and higher-latency links.
+        { timeout: APPLY_TRANSACTION_TIMEOUT_MS, maxWait: 60_000 },
       );
     } catch (err) {
       await this.prisma.importRun.update({

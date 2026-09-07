@@ -13,6 +13,13 @@ import { DomainError } from '../errors';
  * Internal exception details never reach the client — the stack goes to the
  * structured log, keyed by the same request id the client is given.
  */
+/** True only for our own `{ error: { code, message } }` envelope. */
+function isApiErrorResponse(payload: unknown): payload is ApiErrorResponse {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const error = (payload as { error?: unknown }).error;
+  return typeof error === 'object' && error !== null && 'code' in error;
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -48,9 +55,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const payload = exception.getResponse();
-      if (typeof payload === 'object' && payload !== null && 'error' in payload) {
-        const existing = payload as ApiErrorResponse;
-        return { status, body: { error: { ...existing.error, requestId } } };
+      // Only treat this as our own envelope when `error` is an object carrying a
+      // code. Nest's built-in exceptions also have an `error` key, but it holds
+      // a string ("Not Found"), which spreading would explode into char keys.
+      if (isApiErrorResponse(payload)) {
+        return { status, body: { error: { ...payload.error, requestId } } };
       }
       const message =
         typeof payload === 'string'

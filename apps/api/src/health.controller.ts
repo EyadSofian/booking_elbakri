@@ -1,10 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from './common/services/prisma.service';
 import { Public } from './common/decorators';
 
 @ApiTags('health')
-@Controller()
+// Version-neutral: a load balancer's probe should not have to track the API
+// version, so these answer at /api/health as well as /api/v1/health.
+@Controller({ version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 

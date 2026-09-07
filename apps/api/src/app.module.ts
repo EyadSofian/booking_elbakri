@@ -5,8 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env';
 
-import { PrismaService } from './common/services/prisma.service';
-import { ReferenceService } from './common/services/reference.service';
+import { PrismaModule } from './common/services/prisma.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards';
@@ -73,6 +72,7 @@ import { HealthController } from './health.controller';
         },
       ],
     }),
+    PrismaModule,
     AuditModule,
   ],
   controllers: [
@@ -98,8 +98,6 @@ import { HealthController } from './health.controller';
     SettingsController,
   ],
   providers: [
-    PrismaService,
-    ReferenceService,
     AuthService,
     UsersService,
     TripsService,

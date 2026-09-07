@@ -6,6 +6,10 @@
     "baseUrl": "./",
     "declaration": false,
     "declarationMap": false,
+    // Kept inside dist so `nest build`'s deleteOutDir clears it too. Sharing a
+    // buildinfo with `tsc --noEmit` otherwise convinces an emitting build that
+    // everything is already up to date, and it silently produces nothing.
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "strictPropertyInitialization": false,
     "paths": {
       "@/*": ["src/*"]
