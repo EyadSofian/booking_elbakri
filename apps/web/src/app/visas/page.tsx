@@ -158,6 +158,7 @@ export default function VisasPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.visas"
         title={t.visas.title}
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
         actions={

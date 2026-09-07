@@ -39,7 +39,7 @@ function ImportDetailContent() {
     [run, params.id],
   );
 
-  const tabs = useResolvedTabs(IMPORT_TABS, context);
+  const tabs = useResolvedTabs(IMPORT_TABS, context, Boolean(run));
   const { active, activeKey, setTab } = useActiveTab(tabs);
 
   const apply = useMutation({

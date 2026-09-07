@@ -163,6 +163,7 @@ export default function ReconciliationPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.finance"
         title={t.finance.reconciliation}
         description={query.data ? `${query.data.meta.total} ${t.finance.mismatch.toLowerCase()}` : undefined}
       />

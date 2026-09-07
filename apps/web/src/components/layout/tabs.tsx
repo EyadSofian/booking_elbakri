@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, type ComponentType, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { resolveActiveTab, visibleTabs } from '@elbakri/shared';
 import { cn } from '@/lib/utils';
 import { useI18n, useSession } from '@/lib/providers';
 import type { Dictionary } from '@/i18n/dictionaries/en';
@@ -53,19 +54,28 @@ export interface ResolvedTab<TContext> extends TabDefinition<TContext> {
 export function useResolvedTabs<TContext>(
   definitions: TabDefinition<TContext>[],
   context: TContext,
+  /**
+   * Whether the record has loaded.
+   *
+   * Hooks cannot be called conditionally, so this hook runs before the query
+   * resolves. `count` and `unavailable` read the record, so asking them about
+   * a record that does not exist yet would throw and take the page down. While
+   * loading the tabs resolve without those values — which are not on screen
+   * anyway, because the page is showing a skeleton.
+   */
+  ready = true,
 ): ResolvedTab<TContext>[] {
   const { can } = useSession();
   const { t } = useI18n();
   return useMemo(
     () =>
-      definitions
-        .filter((tab) => !tab.permissions?.length || can(...tab.permissions))
-        .map((tab) => ({
-          ...tab,
-          disabledReason: tab.unavailable?.(context, t) ?? null,
-          countValue: tab.count?.(context),
-        })),
-    [definitions, context, can, t],
+      // visibleTabs holds the permission rule and is unit tested directly.
+      visibleTabs(definitions, can).map((tab) => ({
+        ...tab,
+        disabledReason: ready ? tab.unavailable?.(context, t) ?? null : null,
+        countValue: ready ? tab.count?.(context) : undefined,
+      })),
+    [definitions, context, can, t, ready],
   );
 }
 
@@ -88,13 +98,17 @@ export function useActiveTab<TContext>(
   const params = useSearchParams();
   const requested = params.get(param);
 
-  // An unknown or now-forbidden tab falls back to the first one available,
-  // so a stale bookmark still opens a working page.
-  const active = useMemo(() => {
-    const match = tabs.find((tab) => tab.key === requested);
-    if (match) return match;
-    return tabs.find((tab) => !tab.disabledReason) ?? tabs[0];
-  }, [tabs, requested]);
+  // An unknown or now-forbidden tab falls back to the first one available, so a
+  // stale bookmark still opens a working page. The rule lives in the shared
+  // package and is unit tested there.
+  const active = useMemo(
+    () =>
+      resolveActiveTab(
+        tabs.map((tab) => ({ ...tab, disabled: Boolean(tab.disabledReason) })),
+        requested,
+      ) as ResolvedTab<TContext> | undefined,
+    [tabs, requested],
+  );
 
   const setTab = useCallback(
     (key: string) => {

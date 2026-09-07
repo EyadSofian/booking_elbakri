@@ -29,7 +29,7 @@ function TravelerDetailContent() {
     [traveler],
   );
 
-  const tabs = useResolvedTabs(TRAVELER_TABS, context);
+  const tabs = useResolvedTabs(TRAVELER_TABS, context, Boolean(traveler));
   const { active, activeKey, setTab } = useActiveTab(tabs);
 
   if (query.isLoading) {

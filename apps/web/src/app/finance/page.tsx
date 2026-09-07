@@ -59,6 +59,7 @@ export default function FinanceOverviewPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.finance"
         title={t.finance.title}
         description={t.finance.outstandingDerived}
         actions={

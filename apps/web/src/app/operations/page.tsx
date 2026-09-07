@@ -86,6 +86,7 @@ export default function OperationsPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.operations"
         title={t.nav.todaysOperations}
         description={formatDate(date, locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         actions={

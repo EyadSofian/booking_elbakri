@@ -77,6 +77,7 @@ export default function ImportsPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.imports"
         title={t.imports.title}
         description={t.imports.uploadHint}
         actions={

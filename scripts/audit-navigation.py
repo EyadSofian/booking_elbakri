@@ -99,6 +99,13 @@ def main():
             for f in files:
                 print(f'      <- {f}')
 
+    if '--json' in sys.argv:
+        print(json.dumps({
+            'routes': sorted(routes),
+            'broken': {k: sorted(v) for k, v in broken.items()},
+            'shadowed': {k: [route, sorted(files)] for k, (route, files) in shadowed.items()},
+        }))
+
     return 1 if (broken or shadowed) else 0
 
 if __name__ == '__main__':

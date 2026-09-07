@@ -207,6 +207,7 @@ export default function TransfersPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.transfers"
         title={t.transfers.title}
         description={query.data ? `${query.data.meta.total} ${t.transfers.legs.toLowerCase()}` : undefined}
         actions={

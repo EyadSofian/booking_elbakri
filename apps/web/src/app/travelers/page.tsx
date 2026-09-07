@@ -92,6 +92,7 @@ export default function TravelersPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.travelers"
         title={t.nav.travelers}
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
       />

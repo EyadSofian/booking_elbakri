@@ -37,7 +37,7 @@ function TripDetailContent() {
   const trip = query.data;
   const context = useMemo<TripTabContext>(() => ({ trip: trip as TripDetail }), [trip]);
 
-  const tabs = useResolvedTabs(TRIP_TABS, context);
+  const tabs = useResolvedTabs(TRIP_TABS, context, Boolean(trip));
   const { active, activeKey, setTab } = useActiveTab(tabs);
 
   const changeStatus = useMutation({

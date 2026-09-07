@@ -183,6 +183,7 @@ export default function TripsPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.trips"
         title={t.trips.title}
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
         actions={

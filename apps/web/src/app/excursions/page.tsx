@@ -178,6 +178,7 @@ export default function ExcursionsPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.excursions"
         title={t.excursions.title}
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
         actions={

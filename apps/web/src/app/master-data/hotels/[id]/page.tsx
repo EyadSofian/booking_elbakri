@@ -349,7 +349,7 @@ function HotelDetailContent() {
 
   const hotel = query.data;
   const context = useMemo<Ctx>(() => ({ hotel: hotel as HotelDetail }), [hotel]);
-  const tabs = useResolvedTabs(HOTEL_TABS, context);
+  const tabs = useResolvedTabs(HOTEL_TABS, context, Boolean(hotel));
   const { active, activeKey, setTab } = useActiveTab(tabs);
 
   if (query.isLoading) {

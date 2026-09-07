@@ -16,6 +16,7 @@ import { Badge, statusVariant } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { HotelPicker } from '@/components/data/hotel-picker';
 import {
   Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -80,12 +81,6 @@ export default function HotelBookingsPage() {
       }),
   });
 
-  const hotels = useQuery({
-    queryKey: ['hotels', 'options'],
-    queryFn: () => api.get<Array<{ id: string; name: string }>>('/hotels', { pageSize: 200 }),
-    enabled: filtersOpen,
-    select: (d) => (Array.isArray(d) ? d : (d as { data?: Array<{ id: string; name: string }> }).data ?? []),
-  });
 
   const columns: Column<BookingRow>[] = [
     {
@@ -217,6 +212,7 @@ export default function HotelBookingsPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.hotelBookings"
         title={t.hotels.title}
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
         actions={
@@ -308,14 +304,17 @@ export default function HotelBookingsPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="hotelId">{t.hotels.hotel}</Label>
-              <select id="hotelId" value={state.filters.hotelId ?? ''}
-                onChange={(e) => update({ hotelId: e.target.value || undefined })}
-                className="h-9 w-full rounded-md border border-input bg-surface px-3 text-sm">
-                <option value="">{t.common.all}</option>
-                {(hotels.data ?? []).map((h) => (
-                  <option key={h.id} value={h.id}>{h.name}</option>
-                ))}
-              </select>
+              {/*
+                A searchable picker rather than a native select: the catalogue
+                runs to hundreds of hotels, and people search by the spelling
+                they remember, which is often an alias.
+              */}
+              <HotelPicker
+                id="hotelId"
+                value={state.filters.hotelId ?? null}
+                onChange={(hotelId) => update({ hotelId: hotelId ?? undefined })}
+                placeholder={t.common.all}
+              />
             </div>
 
             <div className="space-y-1.5">

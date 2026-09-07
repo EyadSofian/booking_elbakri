@@ -209,6 +209,7 @@ export default function DataQualityPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.dataQuality"
         title={t.dataQuality.title}
         description={
           summary.data ? `${summary.data.openTotal} ${t.dataQuality.openIssues.toLowerCase()}` : undefined

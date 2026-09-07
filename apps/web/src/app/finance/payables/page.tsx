@@ -146,6 +146,7 @@ export default function PayablesPage() {
   return (
     <>
       <PageHeader
+        guideKey="page.finance"
         title={t.finance.payables}
         description={t.finance.outstandingDerived}
         actions={
