@@ -1,7 +1,7 @@
 import {
   Building2, CalendarClock, CarFront, ClipboardList, Database, FileSpreadsheet,
   FileWarning, Gauge, Globe2, Hotel, KeyRound, LayoutDashboard, MapPin,
-  Receipt, Scale, Settings, ShieldCheck, Ship, Sparkles, Truck, UserCog,
+  Link2, Receipt, Scale, Settings, ShieldCheck, Ship, Sparkles, Truck, UserCog,
   Users, UtensilsCrossed, Wallet, type LucideIcon,
 } from 'lucide-react';
 import { PERMISSIONS } from '@elbakri/shared';
@@ -199,6 +199,12 @@ export const NAV_SECTIONS: NavSection[] = [
         label: (t) => t.nav.importCenter,
         permissions: [PERMISSIONS.IMPORTS_REVIEW, PERMISSIONS.IMPORTS_UPLOAD],
         matchPrefix: true,
+      },
+      {
+        href: '/matching',
+        icon: Link2,
+        label: (t) => t.imports.steps.matching,
+        permissions: [PERMISSIONS.MASTER_DATA_READ],
       },
       {
         href: '/data-quality',

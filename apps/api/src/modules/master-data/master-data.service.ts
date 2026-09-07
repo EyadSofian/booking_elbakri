@@ -102,18 +102,49 @@ export class MasterDataService {
   // Hotels
   // -------------------------------------------------------------------------
 
-  async listHotels(query: MasterListQuery): Promise<PaginatedResponse<unknown>> {
+  async listHotels(
+    query: MasterListQuery & {
+      region?: string;
+      syncStatus?: string;
+      starRating?: number;
+      hotelGroupName?: string;
+      sortBy?: string;
+      sortDir?: 'asc' | 'desc';
+    },
+  ): Promise<PaginatedResponse<unknown>> {
+    const search = query.q ? normalizeForSearch(query.q) : null;
     const where: Prisma.HotelWhereInput = {
       deletedAt: null,
       ...(query.includeInactive ? {} : { isActive: true }),
-      ...(query.q ? { normalizedName: { contains: normalizeForSearch(query.q) } } : {}),
+      // Search covers approved aliases too, so a hotel is findable by the
+      // spelling someone actually remembers.
+      ...(search
+        ? {
+            OR: [
+              { normalizedName: { contains: search } },
+              { aliases: { some: { aliasKey: { contains: search } } } },
+              { hotelGroupName: { contains: query.q!, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(query.region ? { region: { contains: query.region, mode: 'insensitive' } } : {}),
+      ...(query.syncStatus ? { syncStatus: query.syncStatus } : {}),
+      ...(query.starRating ? { starRating: query.starRating } : {}),
+      ...(query.hotelGroupName
+        ? { hotelGroupName: { contains: query.hotelGroupName, mode: 'insensitive' } }
+        : {}),
     };
+
+    const SORTABLE = new Set(['name', 'region', 'starRating', 'lastSyncedAt', 'createdAt']);
+    const sortBy = query.sortBy && SORTABLE.has(query.sortBy) ? query.sortBy : 'name';
+    const orderBy = { [sortBy]: query.sortDir ?? 'asc' } as Prisma.HotelOrderByWithRelationInput;
+
     const [data, total] = await this.prisma.$transaction([
       this.prisma.hotel.findMany({
         where,
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
-        orderBy: { name: 'asc' },
+        orderBy,
         include: {
           aliases: { where: { status: AliasStatus.APPROVED }, select: { id: true, alias: true } },
           _count: { select: { bookings: true, staySegments: true } },
@@ -122,6 +153,42 @@ export class MasterDataService {
       this.prisma.hotel.count({ where }),
     ]);
     return { data, meta: buildPaginationMeta(query.page, query.pageSize, total) };
+  }
+
+  /**
+   * One hotel with everything the directory screen shows.
+   *
+   * Deliberately carries no pricing: hotel rates live in the Rate Hub and are
+   * not part of this system.
+   */
+  async findHotel(id: string): Promise<unknown> {
+    const hotel = await this.prisma.hotel.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        aliases: { orderBy: { alias: 'asc' } },
+        locations: { select: { id: true, name: true, kind: true } },
+        _count: { select: { bookings: true, staySegments: true, excursionBookings: true } },
+      },
+    });
+    if (!hotel) throw new NotFoundError('Hotel', id);
+
+    const recentBookings = await this.prisma.hotelBooking.findMany({
+      where: { hotelId: id, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true, reference: true, status: true,
+        tripFile: { select: { id: true, reference: true } },
+        leadTraveler: { select: { id: true, fullName: true } },
+        staySegments: {
+          orderBy: { sequence: 'asc' },
+          take: 1,
+          select: { checkIn: true, checkOut: true, nights: true },
+        },
+      },
+    });
+
+    return { ...hotel, recentBookings };
   }
 
   async createHotel(

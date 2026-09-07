@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import type { Request } from 'express';
 import { PERMISSIONS } from '@elbakri/shared';
 import { MasterDataService } from './master-data.service';
@@ -14,6 +14,22 @@ class MasterListDto extends PaginationDto {
   @IsString() @MaxLength(200) @IsOptional() q?: string;
   @Transform(toBoolean) @IsBoolean() @IsOptional() includeInactive?: boolean;
   @IsString() @MaxLength(40) @IsOptional() kind?: string;
+}
+
+/**
+ * The hotel directory's own filters.
+ *
+ * A real class, not an intersection: Nest's ValidationPipe skips anything whose
+ * metatype is not a class, which silently disables validation and the numeric
+ * coercion these filters depend on.
+ */
+class HotelListDto extends MasterListDto {
+  @IsString() @MaxLength(120) @IsOptional() region?: string;
+  @IsString() @MaxLength(40) @IsOptional() syncStatus?: string;
+  @Type(() => Number) @IsInt() @Min(1) @Max(5) @IsOptional() starRating?: number;
+  @IsString() @MaxLength(200) @IsOptional() hotelGroupName?: string;
+  @IsString() @MaxLength(40) @IsOptional() sortBy?: string;
+  @IsIn(['asc', 'desc']) @IsOptional() sortDir?: 'asc' | 'desc';
 }
 
 class CreatePartnerDto {
@@ -85,9 +101,16 @@ export class MasterDataController {
     return this.masterData.createPartner(dto, this.ctx(req, actor));
   }
 
+  @Get('hotels/:id')
+  @RequirePermissions(PERMISSIONS.MASTER_DATA_READ)
+  @ApiOperation({ summary: 'One hotel with its aliases, usage and sync state' })
+  findHotel(@Param('id', ParseUUIDPipe) id: string) {
+    return this.masterData.findHotel(id);
+  }
+
   @Get('hotels')
   @RequirePermissions(PERMISSIONS.MASTER_DATA_READ)
-  listHotels(@Query() query: MasterListDto) {
+  listHotels(@Query() query: HotelListDto) {
     return this.masterData.listHotels(query);
   }
 

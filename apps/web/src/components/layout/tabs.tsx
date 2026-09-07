@@ -30,8 +30,11 @@ export interface TabDefinition<TContext = unknown> {
    * Why this tab cannot be used yet, given the record's state. Returning a
    * reason renders the tab disabled *with that explanation* rather than as a
    * control that silently does nothing.
+   *
+   * Receives the dictionary because the reason is shown to the user and must
+   * be localised like everything else.
    */
-  unavailable?: (ctx: TContext) => string | null;
+  unavailable?: (ctx: TContext, t: Dictionary) => string | null;
   content: ComponentType<{ context: TContext }>;
 }
 
@@ -52,16 +55,17 @@ export function useResolvedTabs<TContext>(
   context: TContext,
 ): ResolvedTab<TContext>[] {
   const { can } = useSession();
+  const { t } = useI18n();
   return useMemo(
     () =>
       definitions
         .filter((tab) => !tab.permissions?.length || can(...tab.permissions))
         .map((tab) => ({
           ...tab,
-          disabledReason: tab.unavailable?.(context) ?? null,
+          disabledReason: tab.unavailable?.(context, t) ?? null,
           countValue: tab.count?.(context),
         })),
-    [definitions, context, can],
+    [definitions, context, can, t],
   );
 }
 
