@@ -348,9 +348,27 @@ cannot come back.
 ```bash
 npm run test -w @elbakri/shared    # 147 — parsers, rules, tab routing
 npm run test -w @elbakri/api       #  23 — directory boundary, hotel sync
-npm run test:e2e -w @elbakri/web   # navigation audit, en/ar × desktop/mobile
+npm run test:e2e -w @elbakri/web   # every page renders, tabs, en/ar × desktop/mobile
+python3 scripts/audit-navigation.py            # no internal link 404s
+API_PASSWORD=… python3 scripts/check-api-contracts.py   # 85 field assertions
 php api/tests/hotel_directory_test.php   # in elbakri-rate
 ```
+
+### Why the contract check exists
+
+`/finance` shipped broken. The page read `partnerBalances`, `overdueAmount` and
+`totalBilled`; the endpoint returns `counterpartyBalances`, `overdueOutstanding`
+and `totalPayable`. It typechecked perfectly, because the type was a fiction
+written alongside the component rather than derived from the server.
+
+TypeScript cannot catch this, and neither can a unit test with a mocked
+response — both check the code against the same assumption. Only asking the real
+API does.
+
+`scripts/check-api-contracts.py` makes 85 field assertions across 19 endpoints,
+plus the hotel pricing boundary from the consumer side. Four more pages were
+wrong the same way and were found by running it: Reports, Settings, Audit and
+Reconciliation.
 
 Verified in a browser against real data: nine tabs render, `?tab=` survives a
 refresh, Back and Forward step through tab history, an invalid tab falls back to

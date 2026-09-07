@@ -250,6 +250,10 @@ npm run test:api              #  23 — directory boundary, hotel sync
 npm run test:e2e -w @elbakri/web   # navigation audit, en/ar x desktop/mobile
 
 python3 scripts/audit-navigation.py   # every internal link resolves
+
+# Asserts the API returns the fields each screen reads. A page can typecheck
+# perfectly against a shape the server never sends — this is what catches that.
+API_PASSWORD=… python3 scripts/check-api-contracts.py
 ```
 
 The parser tests use the **actual values from the supplied workbooks** —

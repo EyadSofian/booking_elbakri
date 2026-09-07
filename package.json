@@ -27,7 +27,10 @@
     "prisma:deploy": "npm run prisma:deploy -w @elbakri/api",
     "seed": "npm run seed -w @elbakri/api",
     "lint": "npm run lint -w @elbakri/api && npm run lint -w @elbakri/web",
-    "typecheck": "npm run typecheck -w @elbakri/shared && npm run typecheck -w @elbakri/api && npm run typecheck -w @elbakri/web"
+    "typecheck": "npm run typecheck -w @elbakri/shared && npm run typecheck -w @elbakri/api && npm run typecheck -w @elbakri/web",
+    "check:routes": "python3 scripts/audit-navigation.py",
+    "check:contracts": "python3 scripts/check-api-contracts.py",
+    "check:all": "npm run check:routes && npm run typecheck && npm test"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
