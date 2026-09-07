@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env';
 
 import { PrismaModule } from './common/services/prisma.module';
+import { HotelDirectoryModule } from './modules/hotel-directory/hotel-directory.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards';
@@ -74,6 +75,7 @@ import { HealthController } from './health.controller';
     }),
     PrismaModule,
     AuditModule,
+    HotelDirectoryModule,
   ],
   controllers: [
     HealthController,

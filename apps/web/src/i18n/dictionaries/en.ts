@@ -602,6 +602,9 @@ export const en = {
     LAST_SUPER_ADMIN:
       'This is the last active Super Admin and cannot be removed.',
     CANNOT_MODIFY_OWN_ACCESS: 'You cannot change your own access.',
+    SYNC_IN_PROGRESS: 'A hotel synchronisation is already running.',
+    HOTEL_DIRECTORY_UNAVAILABLE:
+      'The Rate Hub could not be reached. The hotel list is still available — it just was not refreshed.',
     RATE_LIMITED: 'Too many requests. Please wait a moment.',
     INTERNAL_ERROR: 'Something went wrong. Please try again.',
     NETWORK: 'Could not reach the server. Check your connection.',

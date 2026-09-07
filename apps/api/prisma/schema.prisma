@@ -266,6 +266,25 @@ model Hotel {
   notes          String?
   isActive       Boolean @default(true)
 
+  // --- External directory synchronisation -------------------------------
+  // Descriptive metadata mirrored from the ELBAKRI Rate Hub. Pricing is
+  // deliberately absent: the two products stay separate and the integration
+  // boundary is hotel identity and description only.
+  sourceSystem         String? // e.g. "elbakri-rate"; null for hotels created here
+  externalId           String? // the hotel's id in the upstream system
+  hotelGroupName       String?
+  region               String? // upstream region; distinct from `city`
+  subRegion            String?
+  description          String?
+  facilities           String?
+  childPolicyDefault   String?
+  transferNotesDefault String?
+  externalStatus       String? // upstream Active/Inactive, kept verbatim
+  externalUpdatedAt    DateTime?
+  lastSyncedAt         DateTime?
+  /// LINKED | NEEDS_MATCH | LOCAL_ONLY | UNLINKED
+  syncStatus           String    @default("LOCAL_ONLY")
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -275,9 +294,15 @@ model Hotel {
   staySegments      HotelStaySegment[]
   excursionBookings ExcursionBooking[]
   counterparties    Counterparty[]
+  locations         Location[]
 
+  // Matching on the identifier rather than the name means an upstream rename
+  // updates the record instead of creating a duplicate.
+  @@unique([sourceSystem, externalId])
   @@index([city])
   @@index([isActive])
+  @@index([syncStatus])
+  @@index([region])
   @@map("hotels")
 }
 
@@ -382,11 +407,15 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // A hotel used as a pickup or drop-off point is the same place as the hotel,
+  // not a second record that happens to share its name.
+  hotel    Hotel?          @relation(fields: [hotelId], references: [id], onDelete: SetNull)
   aliases  LocationAlias[]
   legsFrom TransferLeg[]   @relation("LegFrom")
   legsTo   TransferLeg[]   @relation("LegTo")
 
   @@index([kind])
+  @@index([hotelId])
   @@map("locations")
 }
 
@@ -680,19 +709,19 @@ model StatusTransition {
 // ---------------------------------------------------------------------------
 
 model HotelBooking {
-  id                 String    @id @default(uuid())
-  reference          String    @unique
-  tripFileId         String
-  leadTravelerId     String?
-  partnerId          String?
-  hotelId            String?
+  id                       String    @id @default(uuid())
+  reference                String    @unique
+  tripFileId               String
+  leadTravelerId           String?
+  partnerId                String?
+  hotelId                  String?
   /// Kept when the hotel text could not be resolved to a master record.
-  hotelRaw           String?
-  bookingDate        DateTime?
-  confirmationNumber String?
-  status             String    @default("DRAFT")
-  notes              String?
-  securityApprovalRequired Boolean @default(false)
+  hotelRaw                 String?
+  bookingDate              DateTime?
+  confirmationNumber       String?
+  status                   String    @default("DRAFT")
+  notes                    String?
+  securityApprovalRequired Boolean   @default(false)
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -822,31 +851,31 @@ model TransferBooking {
 }
 
 model TransferLeg {
-  id                String    @id @default(uuid())
-  transferBookingId String
-  sequence          Int       @default(1)
-  direction         String    @default("OTHER")
-  fromLocationId    String?
-  fromRaw           String?
-  toLocationId      String?
-  toRaw             String?
-  serviceDate       DateTime?
-  serviceDateRaw    String?
+  id                       String    @id @default(uuid())
+  transferBookingId        String
+  sequence                 Int       @default(1)
+  direction                String    @default("OTHER")
+  fromLocationId           String?
+  fromRaw                  String?
+  toLocationId             String?
+  toRaw                    String?
+  serviceDate              DateTime?
+  serviceDateRaw           String?
   /// Minutes since midnight. Rendered as HH:mm by the UI.
-  pickupTimeMinutes Int?
+  pickupTimeMinutes        Int?
   /// The untouched legacy pickup text, e.g. "AT NOON" or "9 :30 AM".
-  pickupTimeRaw     String?
-  pickupTimeParseStatus String?
-  flightNumber      String?
-  paxCount          Int?
-  driverId          String?
-  vehicleId         String?
-  supplierPartnerId String?
-  meetAndGreet      Boolean   @default(false)
-  flowerBouquet     Boolean   @default(false)
-  securityApprovalRequired Boolean @default(false)
-  status            String    @default("DRAFT")
-  notes             String?
+  pickupTimeRaw            String?
+  pickupTimeParseStatus    String?
+  flightNumber             String?
+  paxCount                 Int?
+  driverId                 String?
+  vehicleId                String?
+  supplierPartnerId        String?
+  meetAndGreet             Boolean   @default(false)
+  flowerBouquet            Boolean   @default(false)
+  securityApprovalRequired Boolean   @default(false)
+  status                   String    @default("DRAFT")
+  notes                    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -888,7 +917,7 @@ model ExcursionBooking {
   /// The legacy REST column. Its business meaning is not reliably known from
   /// the source workbook, so the exact value is preserved verbatim and no
   /// financial interpretation is applied. See docs/B-LEGACY-EXCEL-MAPPING.md.
-  legacyRestRaw  String?
+  legacyRestRaw String?
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -996,15 +1025,15 @@ model VisaOrder {
 /// Per-applicant detail. The legacy sheet only recorded an aggregate PAX count,
 /// so an order may legitimately have zero applicant rows.
 model VisaApplicant {
-  id             String    @id @default(uuid())
-  visaOrderId    String
-  travelerId     String?
-  fullName       String?
-  passportNumber String?
-  passportExpiry DateTime?
-  status         String    @default("DOCUMENTS_PENDING")
-  documentsComplete Boolean @default(false)
-  notes          String?
+  id                String    @id @default(uuid())
+  visaOrderId       String
+  travelerId        String?
+  fullName          String?
+  passportNumber    String?
+  passportExpiry    DateTime?
+  status            String    @default("DOCUMENTS_PENDING")
+  documentsComplete Boolean   @default(false)
+  notes             String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1204,16 +1233,16 @@ model ImportRun {
   analysis         Json?
   /// Reconciliation proving every scanned row is accounted for.
   reconciliation   Json?
-  rowsScanned      Int  @default(0)
-  rowsBlank        Int  @default(0)
-  rowsStructural   Int  @default(0)
-  rowsMaster       Int  @default(0)
-  rowsContinuation Int  @default(0)
-  rowsOrphan       Int  @default(0)
-  recordsCreated   Int  @default(0)
-  recordsMatched   Int  @default(0)
-  warningCount     Int  @default(0)
-  errorCount       Int  @default(0)
+  rowsScanned      Int   @default(0)
+  rowsBlank        Int   @default(0)
+  rowsStructural   Int   @default(0)
+  rowsMaster       Int   @default(0)
+  rowsContinuation Int   @default(0)
+  rowsOrphan       Int   @default(0)
+  recordsCreated   Int   @default(0)
+  recordsMatched   Int   @default(0)
+  warningCount     Int   @default(0)
+  errorCount       Int   @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1242,19 +1271,19 @@ model ImportRun {
 }
 
 model ImportSheet {
-  id              String  @id @default(uuid())
+  id              String   @id @default(uuid())
   importRunId     String
   sheetName       String
   /// Which legacy layout this sheet was recognised as, e.g. HOTEL_BOOKING.
   detectedKind    String?
   headerRow       Int?
-  maxRow          Int     @default(0)
-  maxColumn       Int     @default(0)
-  rowsScanned     Int     @default(0)
+  maxRow          Int      @default(0)
+  maxColumn       Int      @default(0)
+  rowsScanned     Int      @default(0)
   /// Column letter -> logical field, plus any columns with no mapping.
   columnMapping   Json?
   unmappedColumns String[]
-  isEmpty         Boolean @default(false)
+  isEmpty         Boolean  @default(false)
   stats           Json?
 
   createdAt DateTime @default(now())
@@ -1269,18 +1298,18 @@ model ImportSheet {
 /// One physical worksheet row, with its raw values kept forever so that any
 /// imported record can be traced back to exactly what the spreadsheet said.
 model ImportRow {
-  id              String  @id @default(uuid())
-  importRunId     String
-  importSheetId   String
-  rowNumber       Int
-  kind            String
-  masterRowNumber Int?
+  id                String  @id @default(uuid())
+  importRunId       String
+  importSheetId     String
+  rowNumber         Int
+  kind              String
+  masterRowNumber   Int?
   /// Verbatim cell values keyed by logical field name.
-  rawValues       Json
+  rawValues         Json
   /// Values from columns with no mapping. Never discarded.
-  unmappedValues  Json?
+  unmappedValues    Json?
   /// Values after parsing/normalisation, with parse status per field.
-  normalizedValues Json?
+  normalizedValues  Json?
   /// Entity type and id this row produced, once applied.
   createdEntityType String?
   createdEntityId   String?
@@ -1455,13 +1484,13 @@ model Notification {
 }
 
 model SavedView {
-  id       String  @id @default(uuid())
-  userId   String
-  name     String
-  resource String
+  id        String  @id @default(uuid())
+  userId    String
+  name      String
+  resource  String
   /// Filters, sorting, visible columns and page size.
-  config   Json
-  isShared Boolean @default(false)
+  config    Json
+  isShared  Boolean @default(false)
   isDefault Boolean @default(false)
 
   createdAt DateTime @default(now())
