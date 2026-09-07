@@ -37,15 +37,34 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
+  /** Render as the child element (e.g. a Link) instead of a <button>. */
   asChild?: boolean;
+  /** Shows a spinner and disables the button. Ignored when `asChild` is set. */
   loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, loading, children, disabled, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button';
+    /**
+     * Radix `Slot` merges its props onto exactly one React element child, so
+     * anything extra — even the `null` from an unrendered spinner — makes it
+     * throw "Expected a single React element child" and takes the whole render
+     * down with it.
+     *
+     * So in `asChild` mode the children pass through untouched. `loading` and
+     * `disabled` are dropped there deliberately: they describe a <button>, and
+     * a link cannot be disabled by an attribute anyway.
+     */
+    if (asChild) {
+      return (
+        <Slot className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props}>
+          {children}
+        </Slot>
+      );
+    }
+
     return (
-      <Comp
+      <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
@@ -53,7 +72,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {loading ? <Loader2 className="animate-spin" aria-hidden /> : null}
         {children}
-      </Comp>
+      </button>
     );
   },
 );

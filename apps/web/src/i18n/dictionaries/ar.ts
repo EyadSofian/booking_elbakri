@@ -539,6 +539,10 @@ export const ar: Dictionary = {
   errors: {
     VALIDATION_FAILED: 'يرجى مراجعة الحقول المحددة.',
     UNAUTHENTICATED: 'يرجى تسجيل الدخول للمتابعة.',
+    INVALID_CREDENTIALS: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+    INVALID_REFRESH_TOKEN: 'انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.',
+    REFRESH_TOKEN_REUSE_DETECTED:
+      'لحماية حسابك تم إنهاء جميع الجلسات. يرجى تسجيل الدخول مرة أخرى.',
     FORBIDDEN: 'ليست لديك صلاحية لتنفيذ هذا الإجراء.',
     NOT_FOUND: 'تعذّر العثور على هذا السجل.',
     CONFLICT: 'هذا التغيير يتعارض مع بيانات موجودة.',

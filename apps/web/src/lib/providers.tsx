@@ -1,7 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Toaster } from 'sonner';
 import { ApiError, api, tokenStore } from './api-client';
@@ -111,6 +111,27 @@ export function AppProviders({
 
   const dir = dirFor(locale);
 
+  /**
+   * Whether the person picked a language on this device.
+   *
+   * An explicit choice outranks the account's stored preference: someone who
+   * switches to Arabic on the sign-in screen should still be in Arabic after
+   * signing in, not snapped back to whatever their profile happens to say.
+   */
+  const explicitLocale = useRef(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('elbakri.locale');
+      if (saved && isLocale(saved)) {
+        explicitLocale.current = true;
+        setLocaleState(saved);
+      }
+    } catch {
+      /* storage may be unavailable */
+    }
+  }, []);
+
   // Keep the document in step with the active locale so CSS logical properties,
   // form controls and the scrollbar side all mirror correctly.
   useEffect(() => {
@@ -127,7 +148,7 @@ export function AppProviders({
     try {
       const me = await api.get<SessionUser>('/auth/me');
       setUser(me);
-      if (isLocale(me.locale)) setLocaleState(me.locale);
+      if (!explicitLocale.current && isLocale(me.locale)) setLocaleState(me.locale);
     } catch {
       setUser(null);
     } finally {
@@ -148,7 +169,9 @@ export function AppProviders({
       }>('/auth/login', { email, password });
       tokenStore.set(result.accessToken, result.refreshToken);
       setUser(result.user);
-      if (isLocale(result.user.locale)) setLocaleState(result.user.locale);
+      if (!explicitLocale.current && isLocale(result.user.locale)) {
+        setLocaleState(result.user.locale);
+      }
     },
     [],
   );
@@ -182,6 +205,7 @@ export function AppProviders({
   );
 
   const setLocale = useCallback((next: Locale) => {
+    explicitLocale.current = true;
     setLocaleState(next);
     try {
       window.localStorage.setItem('elbakri.locale', next);

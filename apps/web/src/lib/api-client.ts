@@ -154,7 +154,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   // An expired access token is refreshed once and the request replayed.
-  if (response.status === 401 && !skipRefresh) {
+  // Sign-in and refresh are excluded: a rejected sign-in is a wrong password,
+  // not an expired token, and trying to refresh there only clears the session
+  // and muddies the error the user actually needs to see.
+  const isAuthEndpoint = /^\/auth\/(login|refresh)$/.test(path);
+  if (response.status === 401 && !skipRefresh && !isAuthEndpoint) {
     const refreshed = await refreshSession();
     if (refreshed) {
       try {

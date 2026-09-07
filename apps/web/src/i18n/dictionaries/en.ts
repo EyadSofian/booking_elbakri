@@ -549,6 +549,10 @@ export const en = {
   errors: {
     VALIDATION_FAILED: 'Please check the highlighted fields.',
     UNAUTHENTICATED: 'Please sign in to continue.',
+    INVALID_CREDENTIALS: 'Email or password is incorrect.',
+    INVALID_REFRESH_TOKEN: 'Your session has ended. Please sign in again.',
+    REFRESH_TOKEN_REUSE_DETECTED:
+      'For your security every session was ended. Please sign in again.',
     FORBIDDEN: 'You do not have permission to do this.',
     NOT_FOUND: 'That record could not be found.',
     CONFLICT: 'That change conflicts with existing data.',
