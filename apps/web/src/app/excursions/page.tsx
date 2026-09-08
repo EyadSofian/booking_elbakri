@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Info, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Download, Info, Search, SlidersHorizontal, X , Plus} from 'lucide-react';
 import { toast } from 'sonner';
 import { ExcursionStatus, PERMISSIONS, type PaginatedResponse } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
@@ -182,6 +183,15 @@ export default function ExcursionsPage() {
         title={t.excursions.title}
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
         actions={
+          <>
+            {can(PERMISSIONS.EXCURSIONS_CREATE) ? (
+              <Button size="sm" asChild>
+                <Link href="/excursions/new">
+                  <Plus className="size-3.5" aria-hidden />
+                  <span className="hidden sm:inline">{t.excursions.newOrder}</span>
+                </Link>
+              </Button>
+            ) : null}
           can(PERMISSIONS.REPORTS_EXPORT) ? (
             <>
               <Button variant="outline" size="sm" onClick={() => download(false)}>
@@ -194,6 +204,7 @@ export default function ExcursionsPage() {
               </Button>
             </>
           ) : null
+          </>
         }
       />
 

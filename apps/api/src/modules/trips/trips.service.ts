@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
-  buildPaginationMeta, canTransition, allowedTransitions, normalizeForSearch,
-  REFERENCE_PREFIXES, TRIP_TRANSITIONS, TripFileStatus,
-  type PaginatedResponse, type TripFileStatus as TripStatus,
+  PERMISSIONS, PaymentStatus, REFERENCE_PREFIXES, TRIP_TRANSITIONS, TripFileStatus, allowedTransitions, buildPaginationMeta, calculateMargin, calculateOutstanding, calculatePaid, canTransition, normalizeForSearch, type PaginatedResponse, type TripFileStatus as TripStatus,
 } from '@elbakri/shared';
 import { PrismaService } from '../../common/services/prisma.service';
 import { ReferenceService } from '../../common/services/reference.service';
@@ -107,7 +105,7 @@ export class TripsService {
   }
 
   /** The full operational file, including the chronological timeline. */
-  async findOne(id: string): Promise<unknown> {
+  async findOne(id: string, permissions: string[] = []): Promise<unknown> {
     const trip = await this.prisma.tripFile.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -151,7 +149,45 @@ export class TripsService {
       },
     });
     if (!trip) throw new NotFoundError('Trip file', id);
-    return { ...trip, timeline: this.buildTimeline(trip) };
+
+    // Derived money is computed here, not in the browser: the balance must come
+    // from the ledger, and a component adding up payments itself is how the two
+    // drift apart.
+    const financialDocuments = trip.financialDocuments.map((doc) => {
+      const payments = doc.payments.map((p) => ({
+        amount: Number(p.amount),
+        status: p.status as (typeof PaymentStatus)[keyof typeof PaymentStatus],
+      }));
+      const paidAmount = calculatePaid(payments);
+      return {
+        ...doc,
+        paidAmount,
+        outstanding: calculateOutstanding(Number(doc.totalAmount), payments),
+      };
+    });
+
+    // Visa amounts are omitted entirely without the permission — not hidden by
+    // the client, which would still have received them.
+    const canSeeVisaFinance =
+      permissions.includes(PERMISSIONS.VISAS_FINANCE_READ) ||
+      permissions.includes(PERMISSIONS.FINANCE_READ);
+
+    const visaOrders = trip.visaOrders.map((order) => {
+      if (!canSeeVisaFinance) {
+        const { netAmount: _n, sellAmount: _s, ...rest } = order;
+        return { ...rest, netAmount: null, sellAmount: null, margin: null };
+      }
+      const net = order.netAmount === null ? null : Number(order.netAmount);
+      const sell = order.sellAmount === null ? null : Number(order.sellAmount);
+      return { ...order, netAmount: net, sellAmount: sell, margin: calculateMargin(sell, net) };
+    });
+
+    return {
+      ...trip,
+      financialDocuments,
+      visaOrders,
+      timeline: this.buildTimeline(trip),
+    };
   }
 
   /**

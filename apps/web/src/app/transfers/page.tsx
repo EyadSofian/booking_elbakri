@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, LayoutList, Search, SlidersHorizontal, Table2, TriangleAlert, X } from 'lucide-react';
+import { Download, LayoutList, Search, SlidersHorizontal, Table2, TriangleAlert, X , Plus} from 'lucide-react';
 import { toast } from 'sonner';
 import {
   PERMISSIONS, TransferDirection, TransferStatus, type PaginatedResponse,
@@ -211,6 +211,15 @@ export default function TransfersPage() {
         title={t.transfers.title}
         description={query.data ? `${query.data.meta.total} ${t.transfers.legs.toLowerCase()}` : undefined}
         actions={
+          <>
+            {can(PERMISSIONS.TRANSFERS_CREATE) ? (
+              <Button size="sm" asChild>
+                <Link href="/transfers/new">
+                  <Plus className="size-3.5" aria-hidden />
+                  <span className="hidden sm:inline">{t.transfers.newTransfer}</span>
+                </Link>
+              </Button>
+            ) : null}
           can(PERMISSIONS.REPORTS_EXPORT) ? (
             <>
               <Button
@@ -230,6 +239,7 @@ export default function TransfersPage() {
               </Button>
             </>
           ) : null
+          </>
         }
       />
 

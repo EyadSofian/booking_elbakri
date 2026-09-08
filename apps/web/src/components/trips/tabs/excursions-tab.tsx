@@ -1,17 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 import { Ship } from 'lucide-react';
-import { useI18n } from '@/lib/providers';
+import { PERMISSIONS } from '@elbakri/shared';
+import { useI18n, useSession } from '@/lib/providers';
 import { formatDate } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, statusVariant } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/data/empty-state';
 import { HelpTip } from '@/components/help/help-tip';
-import type { TripTabContext } from '../types';
+import { addServiceHref, type TripTabContext } from '../types';
 
 export function ExcursionsTab({ context }: { context: TripTabContext }) {
   const { trip } = context;
   const { t, locale } = useI18n();
+  const { can } = useSession();
 
   if (trip.excursionBookings.length === 0) {
     return (
@@ -21,6 +25,15 @@ export function ExcursionsTab({ context }: { context: TripTabContext }) {
             icon={Ship}
             title={t.trips.noExcursions}
             description={t.trips.noExcursionsHint}
+            action={
+              can(PERMISSIONS.EXCURSIONS_CREATE) ? (
+                <Button size="sm" asChild>
+                  <Link href={addServiceHref('/excursions', trip.id)}>
+                    {t.excursions.newOrder}
+                  </Link>
+                </Button>
+              ) : null
+            }
           />
         </CardContent>
       </Card>

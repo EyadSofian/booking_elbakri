@@ -69,8 +69,9 @@ export class TripsController {
   @Get(':id')
   @RequirePermissions(PERMISSIONS.TRIPS_READ)
   @ApiOperation({ summary: 'One trip file with every service and its timeline' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.trips.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentActor() actor: AuthenticatedActor) {
+    // Permissions decide server-side which fields are returned at all.
+    return this.trips.findOne(id, actor.permissions);
   }
 
   @Post()

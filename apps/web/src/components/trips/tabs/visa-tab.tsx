@@ -1,14 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { Globe2 } from 'lucide-react';
 import { PERMISSIONS } from '@elbakri/shared';
 import { useI18n, useSession } from '@/lib/providers';
 import { formatDate, formatMoney } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge, statusVariant } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/data/empty-state';
 import { HelpTip } from '@/components/help/help-tip';
-import type { TripTabContext } from '../types';
+import { addServiceHref, type TripTabContext } from '../types';
 
 export function VisaTab({ context }: { context: TripTabContext }) {
   const { trip } = context;
@@ -23,7 +25,18 @@ export function VisaTab({ context }: { context: TripTabContext }) {
     return (
       <Card>
         <CardContent className="p-0">
-          <EmptyState icon={Globe2} title={t.trips.noVisas} description={t.trips.noVisasHint} />
+          <EmptyState
+            icon={Globe2}
+            title={t.trips.noVisas}
+            description={t.trips.noVisasHint}
+            action={
+              can(PERMISSIONS.VISAS_CREATE) ? (
+                <Button size="sm" asChild>
+                  <Link href={addServiceHref('/visas', trip.id)}>{t.visas.newOrder}</Link>
+                </Button>
+              ) : null
+            }
+          />
         </CardContent>
       </Card>
     );

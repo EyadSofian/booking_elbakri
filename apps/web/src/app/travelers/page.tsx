@@ -1,11 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, X } from 'lucide-react';
-import type { PaginatedResponse } from '@elbakri/shared';
+import { Search, X , Plus} from 'lucide-react';
+import { PERMISSIONS, type PaginatedResponse } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
-import { useI18n } from '@/lib/providers';
+import { useI18n, useSession } from '@/lib/providers';
 import { useListQuery } from '@/hooks/use-list-query';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/layout/page-header';
@@ -31,6 +32,7 @@ interface TravelerRow {
 
 export default function TravelersPage() {
   const { t, locale } = useI18n();
+  const { can } = useSession();
   const { state, update, clearFilters, activeFilterCount } = useListQuery({
     sortBy: 'fullName', sortDir: 'asc',
   });
@@ -94,6 +96,18 @@ export default function TravelersPage() {
       <PageHeader
         guideKey="page.travelers"
         title={t.nav.travelers}
+        actions={
+          <>
+            {can(PERMISSIONS.TRAVELERS_CREATE) ? (
+              <Button size="sm" asChild>
+                <Link href="/travelers/new">
+                  <Plus className="size-3.5" aria-hidden />
+                  <span className="hidden sm:inline">{t.travelers.newTraveler}</span>
+                </Link>
+              </Button>
+            ) : null}
+          </>
+        }
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
       />
 

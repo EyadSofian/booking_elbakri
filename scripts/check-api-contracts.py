@@ -116,6 +116,55 @@ CONTRACTS = [
 # Fields that must NEVER appear — the Rate Hub boundary, checked from this side.
 FORBIDDEN_ON_HOTELS = ['price', 'rate', 'currency', 'package', 'commission', 'cost']
 
+# Nested collections a detail screen reads. A list endpoint can be perfectly
+# correct while the objects inside a detail response are missing derived fields
+# — which is how the trip Finance tab came to show a balance of zero for
+# everything, and the Visa tab an empty margin.
+NESTED_CONTRACTS = [
+    # detail path built from a list, collection, required fields, screen
+    ('/trips', '/trips/{id}', 'financialDocuments',
+     ['reference', 'totalAmount', 'paidAmount', 'outstanding', 'currency'],
+     'Trip file · Finance tab'),
+    ('/trips', '/trips/{id}', 'visaOrders',
+     ['reference', 'status', 'margin'], 'Trip file · Visa tab'),
+    ('/trips', '/trips/{id}', 'hotelBookings',
+     ['reference', 'status', 'staySegments'], 'Trip file · Hotels tab'),
+    ('/trips', '/trips/{id}', 'transferBookings',
+     ['reference', 'status', 'legs'], 'Trip file · Transfers tab'),
+    ('/travelers', '/travelers/{id}', 'tripsAsLead',
+     ['reference', 'status', '_count'], 'Traveller · Overview'),
+    ('/hotels', '/hotels/{id}', 'aliases', ['alias', 'status'], 'Hotel · Aliases'),
+]
+
+
+def check_nested(token, failures):
+    """Walks into a detail response and checks the objects inside it."""
+    checked = 0
+    for list_path, detail_template, collection, required, screen in NESTED_CONTRACTS:
+        try:
+            rows = request(f'{list_path}?pageSize=40', token).get('data') or []
+            found = None
+            for row in rows:
+                detail = request(detail_template.replace('{id}', row['id']), token)
+                items = detail.get(collection) or []
+                if items:
+                    found = items[0]
+                    break
+            if found is None:
+                print(f'  skip  {screen:28} no data to check')
+                continue
+            missing = [f for f in required if f not in found]
+            checked += len(required)
+            if missing:
+                failures.append(f'{screen}: {collection}[] is missing {", ".join(missing)}')
+                print(f'  FAIL  {screen:28} missing {missing}')
+            else:
+                print(f'  ok    {screen:28} {len(required)} fields')
+        except Exception as err:  # noqa: BLE001
+            failures.append(f'{screen}: {err}')
+            print(f'  ERROR {screen:28} {err}')
+    return checked
+
 
 def main():
     token = sign_in()
@@ -147,6 +196,10 @@ def main():
             print(f'  FAIL  {screen:24} missing {missing}')
         else:
             print(f'  ok    {screen:24} {len(required)} fields')
+
+    print()
+    checked += check_nested(token, failures)
+    print()
 
     # The hotel directory must not carry anything financial.
     try:

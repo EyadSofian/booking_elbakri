@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Suspense, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Info } from 'lucide-react';
+import { Info, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { PERMISSIONS, TripFileStatus } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
@@ -12,9 +12,10 @@ import { useI18n, useSession } from '@/lib/providers';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/layout/page-header';
 import { Badge, statusVariant } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { TabBar, TabPanel, useActiveTab, useResolvedTabs } from '@/components/layout/tabs';
 import { TRIP_TABS } from '@/components/trips/tab-registry';
-import type { TripDetail, TripTabContext } from '@/components/trips/types';
+import { addServiceHref, type TripDetail, type TripTabContext } from '@/components/trips/types';
 
 /**
  * Trip File detail.
@@ -70,6 +71,13 @@ function TripDetailContent() {
     );
   }
 
+  const services = [
+    { href: '/hotel-bookings', label: t.hotels.newBooking, short: t.trips.hotels, permission: PERMISSIONS.HOTELS_CREATE },
+    { href: '/transfers', label: t.transfers.newTransfer, short: t.trips.transfers, permission: PERMISSIONS.TRANSFERS_CREATE },
+    { href: '/excursions', label: t.excursions.newOrder, short: t.trips.excursions, permission: PERMISSIONS.EXCURSIONS_CREATE },
+    { href: '/visas', label: t.visas.newOrder, short: t.trips.visa, permission: PERMISSIONS.VISAS_CREATE },
+  ].filter((s) => can(s.permission));
+
   return (
     <>
       <PageHeader
@@ -97,7 +105,22 @@ function TripDetailContent() {
           </span>
         }
         actions={
-          can(PERMISSIONS.TRIPS_UPDATE) ? (
+          <>
+            {/*
+              Adding a service to the trip already on screen is the common case,
+              so each option carries the trip through rather than making the
+              user search for it again on the next page.
+            */}
+            {services.map((service) => (
+              <Button key={service.href} variant="outline" size="sm" asChild>
+                <Link href={addServiceHref(service.href, trip.id)}>
+                  <Plus className="size-3.5" aria-hidden />
+                  <span className="hidden lg:inline">{service.label}</span>
+                  <span className="lg:hidden">{service.short}</span>
+                </Link>
+              </Button>
+            ))}
+            {can(PERMISSIONS.TRIPS_UPDATE) ? (
             <select
               value=""
               onChange={(e) => e.target.value && changeStatus.mutate(e.target.value)}
@@ -114,7 +137,8 @@ function TripDetailContent() {
                   </option>
                 ))}
             </select>
-          ) : null
+            ) : null}
+          </>
         }
       />
 

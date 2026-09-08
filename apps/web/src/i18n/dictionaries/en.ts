@@ -163,6 +163,9 @@ export const en = {
     title: 'Trip Files',
     tripFile: 'Trip file',
     newTripFile: 'New trip file',
+    tripFileRequired: 'Choose the trip file this service belongs to.',
+    searchTripFile: 'Search by reference, traveller or phone',
+    addService: 'Add service',
     newTripFileHint: 'Gather a customer\u2019s services into one file.',
     searchBeforeCreating:
       'Search for the traveller first. Creating a second file for someone who already has one is the most common way this data gets fragmented.',
@@ -207,6 +210,8 @@ export const en = {
   },
 
   travelers: {
+    newTraveler: 'New traveller',
+    possibleDuplicate: 'Someone with a similar name already exists',
     noTrips: 'No trip files yet',
     noTripsHint: 'Trip files created for this traveller will appear here.',
     noHotels: 'No hotel bookings',
@@ -222,6 +227,9 @@ export const en = {
   hotels: {
     title: 'Hotel Bookings',
     newBooking: 'New hotel booking',
+    staysHint: 'A guest who moves between hotels is one booking with several stays.',
+    datesRequired: 'Every stay needs a check-in and a check-out.',
+    zeroNightWarning: 'Check-in and check-out are the same day (zero nights).',
     hotel: 'Hotel',
     checkIn: 'Check in',
     checkOut: 'Check out',
@@ -291,6 +299,8 @@ export const en = {
   transfers: {
     title: 'Transfers',
     newTransfer: 'New transfer',
+    legsHint: 'The journey out and the journey back belong to the same booking.',
+    dateRequired: 'Every leg needs a date.',
     dispatchBoard: 'Dispatch board',
     list: 'List',
     leg: 'Leg',
@@ -318,6 +328,8 @@ export const en = {
   excursions: {
     title: 'Excursions',
     newOrder: 'New excursion order',
+    activitiesHint: 'One customer’s activities stay together as a single order.',
+    activityRequired: 'Add at least one activity.',
     order: 'Excursion order',
     activity: 'Activity',
     activities: 'Activities',
@@ -335,6 +347,7 @@ export const en = {
   visas: {
     title: 'Visas',
     newOrder: 'New visa order',
+    applicantsHint: 'Optional. Add them now, or keep the passenger count and add them later.',
     origin: 'From',
     destination: 'To',
     applicants: 'Applicants',

@@ -166,6 +166,9 @@ export const ar: Dictionary = {
     title: 'ملفات الرحلات',
     tripFile: 'ملف الرحلة',
     newTripFile: 'ملف رحلة جديد',
+    tripFileRequired: 'اختر ملف الرحلة الذي تتبعه هذه الخدمة.',
+    searchTripFile: 'ابحث بالمرجع أو المسافر أو رقم الهاتف',
+    addService: 'إضافة خدمة',
     newTripFileHint: 'اجمع خدمات العميل في ملف واحد.',
     searchBeforeCreating:
       'ابحث عن المسافر أولًا. إنشاء ملف ثانٍ لعميل لديه ملف بالفعل هو أكثر ما يشتّت هذه البيانات.',
@@ -210,6 +213,8 @@ export const ar: Dictionary = {
   },
 
   travelers: {
+    newTraveler: 'مسافر جديد',
+    possibleDuplicate: 'يوجد شخص باسم مشابه بالفعل',
     noTrips: 'لا توجد ملفات رحلات بعد',
     noTripsHint: 'ستظهر هنا ملفات الرحلات المنشأة لهذا المسافر.',
     noHotels: 'لا توجد حجوزات فنادق',
@@ -225,6 +230,9 @@ export const ar: Dictionary = {
   hotels: {
     title: 'حجوزات الفنادق',
     newBooking: 'حجز فندقي جديد',
+    staysHint: 'النزيل الذي ينتقل بين الفنادق هو حجز واحد بعدة فترات إقامة.',
+    datesRequired: 'كل إقامة تحتاج تاريخ وصول وتاريخ مغادرة.',
+    zeroNightWarning: 'تاريخ الوصول والمغادرة في نفس اليوم (بدون ليالٍ).',
     hotel: 'الفندق',
     checkIn: 'تاريخ الوصول',
     checkOut: 'تاريخ المغادرة',
@@ -294,6 +302,8 @@ export const ar: Dictionary = {
   transfers: {
     title: 'التنقلات',
     newTransfer: 'تنقل جديد',
+    legsHint: 'رحلة الذهاب والعودة تنتميان لنفس الحجز.',
+    dateRequired: 'كل مسار يحتاج تاريخًا.',
     dispatchBoard: 'لوحة التشغيل',
     list: 'القائمة',
     leg: 'مسار',
@@ -321,6 +331,8 @@ export const ar: Dictionary = {
   excursions: {
     title: 'الرحلات السياحية',
     newOrder: 'طلب رحلات جديد',
+    activitiesHint: 'أنشطة العميل تبقى معًا في طلب واحد.',
+    activityRequired: 'أضف نشاطًا واحدًا على الأقل.',
     order: 'طلب الرحلات',
     activity: 'النشاط',
     activities: 'الأنشطة',
@@ -338,6 +350,7 @@ export const ar: Dictionary = {
   visas: {
     title: 'التأشيرات',
     newOrder: 'طلب تأشيرة جديد',
+    applicantsHint: 'اختياري. أضفهم الآن، أو اكتفِ بعدد الأفراد وأضفهم لاحقًا.',
     origin: 'من',
     destination: 'إلى',
     applicants: 'مقدّمو الطلب',

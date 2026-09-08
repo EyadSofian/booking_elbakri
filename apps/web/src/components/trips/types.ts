@@ -158,3 +158,13 @@ export interface TripDetail {
 export interface TripTabContext {
   trip: TripDetail;
 }
+
+/**
+ * Where a tab sends someone to add the service it shows.
+ *
+ * Adding a service to the trip you are already looking at is the common case,
+ * so the trip is carried through rather than made them search for it again.
+ */
+export function addServiceHref(resource: string, tripFileId: string): string {
+  return `${resource}/new?tripFileId=${encodeURIComponent(tripFileId)}`;
+}

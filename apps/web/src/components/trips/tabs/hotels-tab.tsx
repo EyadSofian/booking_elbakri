@@ -1,23 +1,40 @@
 'use client';
 
+import Link from 'next/link';
 import { Hotel, TriangleAlert } from 'lucide-react';
-import { useI18n } from '@/lib/providers';
+import { PERMISSIONS } from '@elbakri/shared';
+import { useI18n, useSession } from '@/lib/providers';
 import { formatDate } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, statusVariant } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/data/empty-state';
 import { HelpTip } from '@/components/help/help-tip';
-import type { TripTabContext } from '../types';
+import { addServiceHref, type TripTabContext } from '../types';
 
 export function HotelsTab({ context }: { context: TripTabContext }) {
   const { trip } = context;
   const { t, locale } = useI18n();
+  const { can } = useSession();
 
   if (trip.hotelBookings.length === 0) {
     return (
       <Card>
         <CardContent className="p-0">
-          <EmptyState icon={Hotel} title={t.trips.noHotels} description={t.trips.noHotelsHint} />
+          <EmptyState
+            icon={Hotel}
+            title={t.trips.noHotels}
+            description={t.trips.noHotelsHint}
+            action={
+              can(PERMISSIONS.HOTELS_CREATE) ? (
+                <Button size="sm" asChild>
+                  <Link href={addServiceHref('/hotel-bookings', trip.id)}>
+                    {t.hotels.newBooking}
+                  </Link>
+                </Button>
+              ) : null
+            }
+          />
         </CardContent>
       </Card>
     );

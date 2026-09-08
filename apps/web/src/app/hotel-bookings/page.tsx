@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Search, SlidersHorizontal, TriangleAlert, X } from 'lucide-react';
+import { Download, Search, SlidersHorizontal, TriangleAlert, X , Plus} from 'lucide-react';
 import { toast } from 'sonner';
 import { HotelBookingStatus, PERMISSIONS, type PaginatedResponse } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
@@ -216,6 +217,15 @@ export default function HotelBookingsPage() {
         title={t.hotels.title}
         description={query.data ? `${query.data.meta.total} ${t.common.total.toLowerCase()}` : undefined}
         actions={
+          <>
+            {can(PERMISSIONS.HOTELS_CREATE) ? (
+              <Button size="sm" asChild>
+                <Link href="/hotel-bookings/new">
+                  <Plus className="size-3.5" aria-hidden />
+                  <span className="hidden sm:inline">{t.hotels.newBooking}</span>
+                </Link>
+              </Button>
+            ) : null}
           can(PERMISSIONS.REPORTS_EXPORT) ? (
             <>
               <Button variant="outline" size="sm" onClick={() => download(false)}>
@@ -232,6 +242,7 @@ export default function HotelBookingsPage() {
               </Button>
             </>
           ) : null
+          </>
         }
       />
 
