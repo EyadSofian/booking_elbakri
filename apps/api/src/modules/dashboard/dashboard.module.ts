@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { OPEN_STATUSES, type DashboardData, type EntityType, type Status } from '@elbakri/shared';
 import { PrismaService } from '../../common/prisma.service';
-import { CurrentUser, type AuthUser } from '../../common/auth';
+import { CurrentUser, Roles, type AuthUser } from '../../common/auth';
 import { IsDateOnly, ListQueryDto } from '../../common/list';
 import { todayIn } from '../../common/values';
 import { HotelBookingsService } from '../ops/hotel-bookings.module';
@@ -67,7 +67,7 @@ export class DashboardService {
         this.prisma.transfer.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { date: { sort: 'asc', nulls: 'last' } }, take: 30 }),
         this.prisma.excursion.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { date: { sort: 'asc', nulls: 'last' } }, take: 30 }),
         this.prisma.visa.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { travelDate: { sort: 'asc', nulls: 'last' } }, take: 30 }),
-        this.prisma.sale.count({ where: { deletedAt: null, status: open } }),
+        this.prisma.sale.count({ where: { deletedAt: null, status: open, ...this.sales.scopeFor(user) } }),
         this.prisma.transfer.count({
           where: { deletedAt: null, driverName: null, status: { notIn: ['CANCELLED', 'DONE'] }, date: { gte: new Date(`${today}T00:00:00Z`) } },
         }),
@@ -106,6 +106,7 @@ export class DashboardService {
     if (user.role === 'ADMIN' || user.role === 'SALES') {
       const monthSales = await this.sales.list(
         Object.assign(new SalesListQuery(), { page: 1, pageSize: 100000, when: 'this-month', dateBy: 'sale' }),
+        user,
       );
       const items = monthSales.data.filter((s) => s.status !== 'CANCELLED');
       month = {
@@ -145,14 +146,14 @@ export class DashboardService {
   }
 
   /** Open (new + in progress) bookings per module — the badges in the menu. */
-  async openCounts() {
+  async openCounts(user: AuthUser) {
     const where = { deletedAt: null, status: open };
     const [HOTEL, TRANSFER, EXCURSION, VISA, SALE] = await Promise.all([
       this.prisma.hotelBooking.count({ where }),
       this.prisma.transfer.count({ where }),
       this.prisma.excursion.count({ where }),
       this.prisma.visa.count({ where }),
-      this.prisma.sale.count({ where }),
+      this.prisma.sale.count({ where: { ...where, ...this.sales.scopeFor(user) } }),
     ]);
     return { HOTEL, TRANSFER, EXCURSION, VISA, SALE };
   }
@@ -214,10 +215,10 @@ export class DashboardService {
   }
 
   /** One box that finds any booking by name, phone, reference, hotel or flight. */
-  async search(q: string) {
+  async search(q: string, user: AuthUser) {
     const query = Object.assign(new ListQueryDto(), { q, page: 1, pageSize: 6 });
     const [sales, hotels, transfers, excursions, visas] = await Promise.all([
-      this.sales.list(Object.assign(new SalesListQuery(), query)),
+      this.sales.list(Object.assign(new SalesListQuery(), query), user),
       this.hotels.list(query),
       this.transfers.list(query),
       this.excursions.list(query),
@@ -247,17 +248,18 @@ export class DashboardController {
   }
 
   @Get('dashboard/open-counts')
-  openCounts() {
-    return this.service.openCounts();
+  openCounts(@CurrentUser() user: AuthUser) {
+    return this.service.openCounts(user);
   }
 
+  @Roles('ADMIN')
   @Get('reports/summary')
   report(@Query() q: ReportQuery) {
     return this.service.report(q.from, q.to);
   }
 
   @Get('search')
-  search(@Query() q: SearchQuery) {
-    return this.service.search(q.q);
+  search(@Query() q: SearchQuery, @CurrentUser() user: AuthUser) {
+    return this.service.search(q.q, user);
   }
 }

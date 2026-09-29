@@ -188,8 +188,26 @@ export class SalesService {
     this.tz = config.get<string>('APP_TIMEZONE', 'Africa/Cairo');
   }
 
-  findRow(id: string) {
-    return this.prisma.sale.findFirst({ where: { id, deletedAt: null }, include });
+  /**
+   * A salesperson only ever sees their own sales — the ones they sold or
+   * entered. Admin and operations are not narrowed.
+   */
+  private scope(user?: AuthUser): Record<string, unknown> {
+    return user?.role === 'SALES' ? { OR: [{ sellerId: user.id }, { createdById: user.id }] } : {};
+  }
+
+  /** Sales visible to this user (the open-request badge and the home page count these). */
+  scopeFor(user?: AuthUser): Record<string, unknown> {
+    return this.scope(user);
+  }
+
+  findRow(id: string, user?: AuthUser) {
+    return this.prisma.sale.findFirst({ where: { id, deletedAt: null, ...this.scope(user) }, include });
+  }
+
+  /** Throws "not found" unless the user may see the sale. */
+  async assertVisible(id: string, user: AuthUser): Promise<void> {
+    await this.mustFind(id, user);
   }
 
   private paymentItem(p: Row['payments'][number]): SalePaymentItem {
@@ -257,8 +275,8 @@ export class SalesService {
     };
   }
 
-  private where(q: SalesListQuery): Record<string, unknown> {
-    const and: Record<string, unknown>[] = [{ deletedAt: null }];
+  private where(q: SalesListQuery, user?: AuthUser): Record<string, unknown> {
+    const and: Record<string, unknown>[] = [{ deletedAt: null }, this.scope(user)];
     const term = q.q?.trim();
     if (term) {
       const or: Record<string, unknown>[] = ['customerName', 'phone', 'nationality', 'destination', 'hotelName', 'notes', 'flightDetails', 'serviceType']
@@ -273,8 +291,8 @@ export class SalesService {
     return { AND: and };
   }
 
-  async list(q: SalesListQuery): Promise<ListResponse<SaleItem> & { totals: SaleTotalsByCurrency[] }> {
-    const where = this.where(q);
+  async list(q: SalesListQuery, user?: AuthUser): Promise<ListResponse<SaleItem> & { totals: SaleTotalsByCurrency[] }> {
+    const where = this.where(q, user);
     const filtered = q.status?.length ? { AND: [where, { status: { in: q.status } }] } : where;
     const dir = q.sortDir ?? 'desc';
     const sort: Record<string, unknown>[] =
@@ -304,14 +322,14 @@ export class SalesService {
     };
   }
 
-  private async mustFind(id: string): Promise<Row> {
-    const row = await this.findRow(id);
+  private async mustFind(id: string, user?: AuthUser): Promise<Row> {
+    const row = await this.findRow(id, user);
     if (!row) throw new NotFoundError('Sale', id);
     return row;
   }
 
-  async get(id: string): Promise<SaleDetail> {
-    const row = await this.mustFind(id);
+  async get(id: string, user?: AuthUser): Promise<SaleDetail> {
+    const row = await this.mustFind(id, user);
     const [hotelBookings, transfers, excursions, visas] = await Promise.all([
       this.hotels.list(Object.assign(new ListQueryDto(), { saleId: id, page: 1, pageSize: 100 })),
       this.transfers.list(Object.assign(new ListQueryDto(), { saleId: id, page: 1, pageSize: 100 })),
@@ -394,7 +412,7 @@ export class SalesService {
    * NEW, carrying the customer's details and linked back to this sale.
    */
   async createRequests(id: string, requests: RequestsDto, user: AuthUser): Promise<SaleDetail> {
-    const sale = this.toItem(await this.mustFind(id));
+    const sale = this.toItem(await this.mustFind(id, user));
     const direct = await this.prisma.agency.findFirst({ where: { isDirect: true, isActive: true }, orderBy: { createdAt: 'asc' } });
     const common = {
       guestName: sale.customerName,
@@ -446,24 +464,24 @@ export class SalesService {
         user,
       );
     }
-    return this.get(id);
+    return this.get(id, user);
   }
 
   async update(id: string, dto: UpdateSaleDto, user: AuthUser): Promise<SaleDetail> {
-    const before = this.toItem(await this.mustFind(id));
+    const before = this.toItem(await this.mustFind(id, user));
     this.checkDates(
       dto.startDate === undefined ? before.startDate : dto.startDate,
       dto.endDate === undefined ? before.endDate : dto.endDate,
     );
     await this.prisma.sale.update({ where: { id }, data: this.data(dto) });
-    const after = this.toItem(await this.mustFind(id));
+    const after = this.toItem(await this.mustFind(id, user));
     const changes = this.activity.diff(snapshot(before), snapshot(after), TRACKED);
     if (changes) await this.activity.log({ type: 'SALE', id, action: 'UPDATED', userId: user.id, changes });
-    return this.get(id);
+    return this.get(id, user);
   }
 
   async setStatus(id: string, status: Status, user: AuthUser): Promise<SaleItem> {
-    const before = await this.mustFind(id);
+    const before = await this.mustFind(id, user);
     if (before.status !== status) {
       await this.prisma.sale.update({ where: { id }, data: { status } });
       await this.activity.log({
@@ -472,17 +490,17 @@ export class SalesService {
         changes: { status: { from: before.status, to: status } },
       });
     }
-    return this.toItem(await this.mustFind(id));
+    return this.toItem(await this.mustFind(id, user));
   }
 
   async remove(id: string, user: AuthUser): Promise<void> {
-    await this.mustFind(id);
+    await this.mustFind(id, user);
     await this.prisma.sale.update({ where: { id }, data: { deletedAt: new Date() } });
     await this.activity.log({ type: 'SALE', id, action: 'DELETED', userId: user.id });
   }
 
   async addPayment(id: string, dto: PaymentDto, user: AuthUser): Promise<SaleDetail> {
-    const sale = await this.mustFind(id);
+    const sale = await this.mustFind(id, user);
     await this.prisma.salePayment.create({
       data: {
         saleId: id,
@@ -497,11 +515,11 @@ export class SalesService {
       type: 'SALE', id, action: 'PAYMENT_ADDED', userId: user.id,
       summary: `${dto.amount} ${sale.currency} · ${dto.paidOn}`,
     });
-    return this.get(id);
+    return this.get(id, user);
   }
 
   async removePayment(id: string, paymentId: string, user: AuthUser): Promise<SaleDetail> {
-    const sale = await this.mustFind(id);
+    const sale = await this.mustFind(id, user);
     const payment = sale.payments.find((p) => p.id === paymentId);
     if (!payment) throw new NotFoundError('Payment', paymentId);
     await this.prisma.salePayment.delete({ where: { id: paymentId } });
@@ -509,11 +527,11 @@ export class SalesService {
       type: 'SALE', id, action: 'PAYMENT_REMOVED', userId: user.id,
       summary: `${num(payment.amount)} ${sale.currency} · ${fromDbDate(payment.paidOn)}`,
     });
-    return this.get(id);
+    return this.get(id, user);
   }
 
-  async export(q: SalesListQuery, res: Response): Promise<void> {
-    const { data } = await this.list(Object.assign(new SalesListQuery(), q, { page: 1, pageSize: 100000 }));
+  async export(q: SalesListQuery, res: Response, user: AuthUser): Promise<void> {
+    const { data } = await this.list(Object.assign(new SalesListQuery(), q, { page: 1, pageSize: 100000 }), user);
     // The sales sheet, column for column.
     await sendWorkbook(res, `sales-${todayIn(this.tz)}.xlsx`, 'Sales', [
       { header: 'رقم الحجز', width: 9, value: (s) => s.ref },
@@ -616,22 +634,23 @@ export class SalesController {
   ) {}
 
   @Get()
-  list(@Query() q: SalesListQuery) {
-    return this.service.list(q);
+  list(@Query() q: SalesListQuery, @CurrentUser() user: AuthUser) {
+    return this.service.list(q, user);
   }
 
   @Get('export')
-  export(@Query() q: SalesListQuery, @Res() res: Response) {
-    return this.service.export(q, res);
+  export(@Query() q: SalesListQuery, @Res() res: Response, @CurrentUser() user: AuthUser) {
+    return this.service.export(q, res, user);
   }
 
   @Get(':id')
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.get(id);
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.service.get(id, user);
   }
 
   @Get(':id/activity')
-  history(@Param('id', ParseUUIDPipe) id: string) {
+  async history(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    await this.service.assertVisible(id, user);
     return this.activity.list('SALE', id);
   }
 

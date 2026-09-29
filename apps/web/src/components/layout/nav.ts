@@ -40,7 +40,7 @@ export const NAV: NavGroup[] = [
   {
     key: 'office',
     items: [
-      { href: '/reports', icon: BarChart3, label: (t) => t.nav.reports },
+      { href: '/reports', icon: BarChart3, label: (t) => t.nav.reports, roles: ['ADMIN'] },
       { href: '/settings', icon: Settings, label: (t) => t.nav.settings },
     ],
   },

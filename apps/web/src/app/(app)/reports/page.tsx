@@ -1,11 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, BedDouble, CarFront, FileBadge, TentTree } from 'lucide-react';
 import { STATUSES, type CurrencyCode, type StatusCounts } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
-import { useI18n } from '@/lib/providers';
+import { useI18n, useSession } from '@/lib/providers';
 import { cn, formatNumber, monthRange, todayIso } from '@/lib/utils';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,13 @@ type Period = 'this-month' | 'last-month' | 'this-year' | 'custom';
 
 export default function ReportsPage() {
   const { t, locale, statusLabel } = useI18n();
+  const { user } = useSession();
+  const router = useRouter();
+  const isAdmin = user?.role === 'ADMIN';
+  // Reports are for the admin only; anyone else who types the address goes home.
+  React.useEffect(() => {
+    if (user && !isAdmin) router.replace('/dashboard');
+  }, [user, isAdmin, router]);
   const [period, setPeriod] = React.useState<Period>('this-month');
   const [custom, setCustom] = React.useState(monthRange(0));
 
@@ -48,7 +56,7 @@ export default function ReportsPage() {
   const report = useQuery({
     queryKey: ['/reports', range.from, range.to],
     queryFn: () => api.get<Report>('/reports/summary', range),
-    enabled: Boolean(range.from && range.to && range.from <= range.to),
+    enabled: isAdmin && Boolean(range.from && range.to && range.from <= range.to),
   });
   const r = report.data;
 
@@ -58,6 +66,8 @@ export default function ReportsPage() {
     { key: 'EXCURSION', label: t.nav.excursions, icon: TentTree },
     { key: 'VISA', label: t.nav.visas, icon: FileBadge },
   ];
+
+  if (!isAdmin) return null;
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-5">
