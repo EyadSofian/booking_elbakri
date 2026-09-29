@@ -5,75 +5,51 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
-/** Renders minutes-since-midnight as HH:mm. */
-export function formatMinutes(minutes: number | null | undefined): string | null {
-  if (minutes === null || minutes === undefined) return null;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
+const intlLocale = (locale: string) => (locale === 'ar' ? 'ar-EG' : 'en-GB');
 
 /**
- * Formats a stored calendar date.
+ * Formats a calendar date sent by the API as YYYY-MM-DD.
  *
- * Service dates are stored at UTC midnight, so they are read back in UTC —
- * formatting them in the browser's zone would shift a booking by a day for
- * anyone west of Greenwich.
+ * Read in UTC so a booking never shifts by a day in the viewer's timezone, and
+ * always with Western digits so figures line up in both languages.
  */
 export function formatDate(
-  value: string | Date | null | undefined,
-  locale = 'en',
-  opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: '2-digit' },
+  value: string | null | undefined,
+  locale = 'ar',
+  opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' },
 ): string {
   if (!value) return '—';
-  const date = typeof value === 'string' ? new Date(value) : value;
+  const date = new Date(value.length === 10 ? `${value}T00:00:00Z` : value);
   if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', {
-    ...opts,
-    timeZone: 'UTC',
-    // Western digits in both languages so figures align in tables.
-    numberingSystem: 'latn',
+  return new Intl.DateTimeFormat(intlLocale(locale), { ...opts, timeZone: 'UTC', numberingSystem: 'latn' }).format(date);
+}
+
+/** "12 Oct" — the year is dropped when it is the current one. */
+export function formatShortDate(value: string | null | undefined, locale = 'ar'): string {
+  if (!value) return '—';
+  const sameYear = value.slice(0, 4) === String(new Date().getFullYear());
+  return formatDate(value, locale, sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** A moment in time (history entries), shown in the viewer's own timezone. */
+export function formatDateTime(value: string | null | undefined, locale = 'ar'): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat(intlLocale(locale), {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn',
   }).format(date);
 }
 
-/** Formats a timestamp in the viewer's local zone (audit entries, sign-ins). */
-export function formatDateTime(value: string | Date | null | undefined, locale = 'en'): string {
-  if (!value) return '—';
-  const date = typeof value === 'string' ? new Date(value) : value;
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', {
-    year: 'numeric', month: 'short', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    numberingSystem: 'latn',
-  }).format(date);
+export function formatNumber(value: number | null | undefined, locale = 'ar', digits = 2): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: digits, numberingSystem: 'latn' }).format(value);
 }
 
-export function formatMoney(
-  value: number | string | null | undefined,
-  currency = 'EGP',
-  locale = 'en',
-): string {
-  if (value === null || value === undefined || value === '') return '—';
-  const n = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(n)) return '—';
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', {
-    style: 'currency',
-    currency,
-    numberingSystem: 'latn',
-    maximumFractionDigits: 2,
-  }).format(n);
-}
-
-export function formatNumber(value: number | null | undefined, locale = 'en'): string {
-  if (value === null || value === undefined) return '—';
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', {
-    numberingSystem: 'latn',
-  }).format(value);
-}
-
-/** Today as YYYY-MM-DD in UTC, matching how service dates are stored. */
-export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Today's date (YYYY-MM-DD) in Cairo, which is the business day. */
+export function todayIso(offsetDays = 0): string {
+  const now = new Date(Date.now() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
 
 export function addDaysIso(iso: string, days: number): string {
@@ -82,21 +58,22 @@ export function addDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function initials(name: string | null | undefined): string {
-  if (!name) return '?';
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
+export function monthRange(offset = 0): { from: string; to: string } {
+  const today = todayIso();
+  const d = new Date(`${today.slice(0, 7)}-01T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + offset);
+  const from = d.toISOString().slice(0, 10);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  d.setUTCDate(0);
+  return { from, to: d.toISOString().slice(0, 10) };
 }
 
-/** Debounce, used by search inputs so typing does not fire a query per keystroke. */
-export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (...args: A) => void {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return (...args: A) => {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), ms);
-  };
+export function initials(name: string | null | undefined): string {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
+}
+
+/** Removes empty values so they are not sent as query parameters. */
+export function compact<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== '')) as Partial<T>;
 }

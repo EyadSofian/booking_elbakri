@@ -3,115 +3,110 @@
 @tailwind utilities;
 
 @layer base {
-  /*
-   * Light theme. Every colour is defined here on bare :root so a token always
-   * has a value; the dark blocks below only override, never introduce.
-   */
+  /* Light: warm paper, navy ink, one sun-amber accent. */
   :root {
-    --background: 210 33% 97%;
-    --foreground: 222 47% 11%;
+    --background: 40 30% 97%;
+    --foreground: 222 45% 12%;
 
     --surface: 0 0% 100%;
-    --surface-muted: 210 30% 96%;
-    --surface-raised: 0 0% 100%;
+    --surface-muted: 40 26% 95%;
+    --surface-sunken: 38 22% 92%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-
+    --card-foreground: 222 45% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 222 45% 12%;
 
-    --primary: 222 70% 19%;
+    --primary: 222 69% 19%;
     --primary-foreground: 0 0% 100%;
+    --secondary: 38 22% 92%;
+    --secondary-foreground: 222 40% 18%;
+    --muted: 38 20% 93%;
+    --muted-foreground: 222 12% 42%;
+    --accent: 218 45% 94%;
+    --accent-foreground: 222 55% 20%;
 
-    --secondary: 210 30% 94%;
-    --secondary-foreground: 222 47% 20%;
-
-    --muted: 210 25% 94%;
-    --muted-foreground: 215 16% 42%;
-
-    --accent: 214 60% 94%;
-    --accent-foreground: 222 60% 22%;
-
-    --destructive: 0 72% 45%;
+    --destructive: 0 70% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 58% 32%;
-    --success-foreground: 0 0% 100%;
-    --success-subtle: 152 55% 94%;
+    --sun: 32 88% 48%;
+    --sun-subtle: 40 95% 91%;
+    --sun-foreground: 28 90% 22%;
 
-    --warning: 32 88% 42%;
-    --warning-foreground: 0 0% 100%;
-    --warning-subtle: 40 92% 93%;
+    --success: 158 62% 30%;
+    --success-subtle: 152 48% 92%;
+    --danger: 0 70% 46%;
+    --danger-subtle: 0 85% 96%;
 
-    --info: 213 78% 42%;
-    --info-foreground: 0 0% 100%;
-    --info-subtle: 213 84% 95%;
+    --st-new: 30 90% 38%;
+    --st-new-bg: 40 96% 90%;
+    --st-progress: 212 78% 40%;
+    --st-progress-bg: 212 90% 94%;
+    --st-confirmed: 158 64% 28%;
+    --st-confirmed-bg: 150 50% 91%;
+    --st-done: 222 10% 40%;
+    --st-done-bg: 222 14% 92%;
+    --st-cancelled: 0 68% 44%;
+    --st-cancelled-bg: 0 80% 95%;
 
-    --danger: 0 72% 45%;
-    --danger-foreground: 0 0% 100%;
-    --danger-subtle: 0 84% 96%;
+    --border: 36 18% 86%;
+    --input: 34 14% 78%;
+    --ring: 222 69% 36%;
 
-    --border: 214 25% 88%;
-    --input: 214 25% 86%;
-    --ring: 222 70% 30%;
-
-    --radius: 0.5rem;
+    --radius: 0.625rem;
+    color-scheme: light;
   }
 
-  /*
-   * Dark theme, designed rather than inverted: the surfaces sit on a cool navy
-   * that belongs with the brand mark, and the status colours are re-picked for
-   * contrast on dark rather than reused from light.
-   */
+  /* Dark: the navy of the sidebar, carried across the whole screen. */
   :root[data-theme='dark'] {
-    --background: 222 40% 8%;
-    --foreground: 210 30% 94%;
+    --background: 223 44% 7%;
+    --foreground: 40 25% 94%;
 
-    --surface: 222 34% 11%;
-    --surface-muted: 222 30% 14%;
-    --surface-raised: 222 30% 15%;
+    --surface: 223 38% 10%;
+    --surface-muted: 223 32% 13%;
+    --surface-sunken: 223 40% 6%;
 
-    --card: 222 34% 11%;
-    --card-foreground: 210 30% 94%;
+    --card: 223 38% 10%;
+    --card-foreground: 40 25% 94%;
+    --popover: 223 34% 12%;
+    --popover-foreground: 40 25% 94%;
 
-    --popover: 222 34% 13%;
-    --popover-foreground: 210 30% 94%;
+    --primary: 214 78% 66%;
+    --primary-foreground: 223 50% 9%;
+    --secondary: 223 28% 17%;
+    --secondary-foreground: 40 20% 92%;
+    --muted: 223 26% 16%;
+    --muted-foreground: 220 14% 66%;
+    --accent: 223 30% 18%;
+    --accent-foreground: 40 25% 94%;
 
-    --primary: 214 70% 62%;
-    --primary-foreground: 222 47% 10%;
-
-    --secondary: 222 28% 18%;
-    --secondary-foreground: 210 30% 92%;
-
-    --muted: 222 26% 17%;
-    --muted-foreground: 215 18% 65%;
-
-    --accent: 222 34% 20%;
-    --accent-foreground: 210 35% 92%;
-
-    --destructive: 0 65% 55%;
+    --destructive: 0 68% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 48% 48%;
-    --success-foreground: 152 80% 8%;
-    --success-subtle: 152 30% 18%;
+    --sun: 36 92% 60%;
+    --sun-subtle: 34 45% 17%;
+    --sun-foreground: 40 95% 82%;
 
-    --warning: 38 82% 58%;
-    --warning-foreground: 32 90% 10%;
-    --warning-subtle: 36 40% 20%;
+    --success: 152 50% 52%;
+    --success-subtle: 155 35% 15%;
+    --danger: 0 72% 64%;
+    --danger-subtle: 0 40% 17%;
 
-    --info: 213 78% 62%;
-    --info-foreground: 213 80% 10%;
-    --info-subtle: 213 40% 20%;
+    --st-new: 38 92% 64%;
+    --st-new-bg: 34 45% 17%;
+    --st-progress: 210 85% 70%;
+    --st-progress-bg: 212 45% 19%;
+    --st-confirmed: 152 55% 58%;
+    --st-confirmed-bg: 155 36% 15%;
+    --st-done: 220 12% 68%;
+    --st-done-bg: 223 20% 18%;
+    --st-cancelled: 0 75% 68%;
+    --st-cancelled-bg: 0 40% 17%;
 
-    --danger: 0 68% 60%;
-    --danger-foreground: 0 80% 10%;
-    --danger-subtle: 0 35% 20%;
-
-    --border: 222 22% 22%;
-    --input: 222 22% 24%;
-    --ring: 214 70% 55%;
+    --border: 223 24% 19%;
+    --input: 223 22% 25%;
+    --ring: 214 78% 60%;
+    color-scheme: dark;
   }
 
   * {
@@ -123,120 +118,95 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    @apply bg-background font-sans text-[0.875rem] leading-relaxed text-foreground antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  /*
-   * Arabic needs slightly more line height than the Latin face to stay legible
-   * at these sizes, and the numerals stay Western so figures line up in tables.
-   */
-  html[lang='ar'] body {
-    @apply font-arabic;
-    line-height: 1.7;
-    font-feature-settings: normal;
-  }
-
-  html[lang='ar'] table,
-  html[lang='ar'] .tabular {
+  /* Figures line up in every column. */
+  table,
+  .tabular {
     font-variant-numeric: tabular-nums;
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Phones zoom into anything smaller than 16px when it gains focus. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 
   ::selection {
-    @apply bg-brand-200 text-brand-900;
-  }
-
-  /* Thin, unobtrusive scrollbars — this app has a lot of scrollable regions. */
-  ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-border;
-    border: 2px solid transparent;
-    background-clip: content-box;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/40;
-    background-clip: content-box;
+    background: hsl(var(--sun-subtle));
+    color: hsl(var(--sun-foreground));
   }
 }
 
 @layer components {
-  /*
-   * Directional helpers.
-   *
-   * Layout uses logical properties everywhere, so RTL is a real mirror rather
-   * than a translated LTR page. These few classes cover the cases Tailwind's
-   * physical utilities cannot express.
-   */
-  .flip-rtl {
-    @apply rtl:-scale-x-100;
+  /* A record number, printed like a ticket stub. */
+  .ref-tag {
+    @apply inline-flex items-center whitespace-nowrap rounded-[5px] border border-dashed border-input bg-surface-muted px-1.5 font-mono text-[0.7rem] font-medium leading-5 text-muted-foreground;
+    direction: ltr;
   }
 
-  .table-scroll {
-    @apply -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0;
+  /* The native select keeps its semantics; only the arrow is ours, on the reading end. */
+  .select-arrow {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 7.5l4.5 4.5 4.5-4.5' stroke='%236b7280' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 14px;
+    background-position: right 0.6rem center;
+  }
+  [dir='rtl'] .select-arrow {
+    background-position: left 0.6rem center;
   }
 
-  .skeleton {
-    @apply relative overflow-hidden rounded bg-muted;
-  }
-  .skeleton::after {
-    @apply absolute inset-0 -translate-x-full animate-shimmer;
-    content: '';
-    background-image: linear-gradient(
-      90deg,
-      transparent,
-      hsl(var(--surface) / 0.6),
-      transparent
-    );
+  /* Soft scrollbars inside panels. */
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--input)) transparent;
   }
 
-  /* Dense data grid used by every list screen. */
-  .data-table {
-    @apply w-full border-separate border-spacing-0 text-sm;
-  }
-  .data-table thead th {
-    @apply sticky top-0 z-10 whitespace-nowrap border-b bg-surface-muted px-3 py-2.5
-           text-start text-xs font-semibold uppercase tracking-wide text-muted-foreground;
-  }
-  .data-table tbody td {
-    @apply border-b px-3 py-2.5 align-middle;
-  }
-  .data-table tbody tr:hover {
-    @apply bg-accent/40;
-  }
-  .data-table tbody tr:last-child td {
-    @apply border-b-0;
+  /* Fine paper grain behind the page. */
+  .paper {
+    background-image:
+      radial-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+    background-size: 18px 18px;
   }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  /* Arrows and chevrons point the reading direction. */
+  [dir='rtl'] .flip-rtl {
+    transform: scaleX(-1);
   }
-  .tabular-nums {
-    font-variant-numeric: tabular-nums;
+
+  .ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
   }
-  /* Hides content visually but keeps it available to assistive technology. */
-  .sr-only-focusable:not(:focus):not(:focus-within) {
-    @apply sr-only;
+
+  /*
+   * A value typed by a person keeps its own reading order: "3 dbl · Soft All"
+   * stays in that order inside an Arabic screen, and an Arabic name stays
+   * right-to-left inside an English one (like <bdi>).
+   */
+  .bidi {
+    unicode-bidi: plaintext;
   }
 }
 
-@media print {
-  .no-print {
-    display: none !important;
-  }
-  body {
-    background: white;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

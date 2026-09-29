@@ -1,51 +1,55 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, IBM_Plex_Sans_Arabic } from 'next/font/google';
+import { IBM_Plex_Mono, Readex_Pro } from 'next/font/google';
 import '@/styles/globals.css';
 import { AppProviders } from '@/lib/providers';
 
-// Latin and Arabic faces load together and are exposed as CSS variables, so a
-// mixed-script row — an Arabic traveller name beside a Latin reference — keeps
-// a consistent weight and rhythm instead of falling back mid-line.
-const latin = Inter({
-  subsets: ['latin'],
-  variable: '--font-latin',
+// One face for Arabic and Latin, so a row mixing "عبد الحميد" and "IL Mercato"
+// keeps a single rhythm.
+const sans = Readex_Pro({
+  subsets: ['arabic', 'latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-sans',
   display: 'swap',
 });
 
-const arabic = IBM_Plex_Sans_Arabic({
-  subsets: ['arabic'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-arabic',
+// Record numbers, flight codes and times.
+const mono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-mono',
   display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: {
-    default: 'ELBAKRI OVERSEAS — Operations',
-    template: '%s · ELBAKRI OVERSEAS',
-  },
-  description: 'Booking, operations and finance management for ELBAKRI OVERSEAS.',
+  title: { default: 'ELBAKRI OVERSEAS', template: '%s · ELBAKRI OVERSEAS' },
+  description: 'Sales and operations bookings — ELBAKRI OVERSEAS.',
   icons: { icon: '/brand/elbakri-logo.png' },
-  // An internal operations tool has no business in a search index.
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f3f5f9' },
-    { media: '(prefers-color-scheme: dark)', color: '#0b1220' },
+    { media: '(prefers-color-scheme: light)', color: '#faf8f4' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0f1c' },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // lang and dir are set here for the first paint and then kept in step with
-  // the active locale by AppProviders.
+  // Arabic first; the providers keep lang/dir in step with the chosen language.
   return (
-    <html lang="en" dir="ltr" suppressHydrationWarning>
-      <body className={`${latin.variable} ${arabic.variable} font-sans`}>
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        {/* Applies the saved theme before first paint, so dark mode never flashes white. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('elbakri.theme');if(t!=='dark'&&t!=='light'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t;var l=localStorage.getItem('elbakri.locale');if(l==='en'||l==='ar'){document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr'}}catch(e){}",
+          }}
+        />
+      </head>
+      <body className={`${sans.variable} ${mono.variable}`}>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

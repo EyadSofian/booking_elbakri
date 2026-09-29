@@ -3,7 +3,7 @@ import { cleanDisplay, isEmptyMarker, toAsciiDigits } from './text';
 
 export interface ParsedPhone {
   raw: string | null;
-  /** E.164 form (`+201002998299`) when confidently derivable. */
+  /** E.164 form (`+201000000001`) when confidently derivable. */
   normalized: string | null;
   countryCallingCode: string | null;
   /** Digits only, leading zeros preserved. */

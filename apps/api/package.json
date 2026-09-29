@@ -12,13 +12,12 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
-    "import:legacy": "ts-node -r tsconfig-paths/register scripts/import-legacy.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config test/jest-e2e.json --runInBand"
+    "import:sheets": "ts-node -r tsconfig-paths/register scripts/import-sheets.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

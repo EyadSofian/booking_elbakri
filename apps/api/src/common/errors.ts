@@ -24,46 +24,19 @@ export class NotFoundError extends DomainError {
 }
 
 export class ForbiddenError extends DomainError {
-  constructor(message = 'You do not have permission to perform this action.', details?: Record<string, unknown>) {
-    super(ERROR_CODES.FORBIDDEN, message, HttpStatus.FORBIDDEN, details);
+  constructor(message = 'You do not have permission to perform this action.') {
+    super(ERROR_CODES.FORBIDDEN, message, HttpStatus.FORBIDDEN);
   }
 }
 
 export class ValidationError extends DomainError {
-  constructor(message: string, details?: Record<string, unknown>) {
-    super(ERROR_CODES.VALIDATION_FAILED, message, HttpStatus.BAD_REQUEST, details);
+  constructor(message: string, code: ErrorCode = ERROR_CODES.VALIDATION_FAILED, details?: Record<string, unknown>) {
+    super(code, message, HttpStatus.BAD_REQUEST, details);
   }
 }
 
 export class ConflictError extends DomainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(ERROR_CODES.CONFLICT, message, HttpStatus.CONFLICT, details);
-  }
-}
-
-/**
- * Raised when a client submits an update based on a version of the record that
- * has since changed — the concurrent write is rejected rather than silently
- * overwriting a colleague's edit.
- */
-export class StaleRecordError extends DomainError {
-  constructor(entity: string, expected: number, actual: number) {
-    super(
-      ERROR_CODES.STALE_RECORD,
-      `This ${entity} was modified by someone else. Reload and reapply your changes.`,
-      HttpStatus.CONFLICT,
-      { entity, expectedVersion: expected, currentVersion: actual },
-    );
-  }
-}
-
-export class InvalidStatusTransitionError extends DomainError {
-  constructor(entity: string, from: string, to: string, allowed: readonly string[]) {
-    super(
-      ERROR_CODES.INVALID_STATUS_TRANSITION,
-      `A ${entity} cannot move from ${from} to ${to}.`,
-      HttpStatus.CONFLICT,
-      { entity, from, to, allowed },
-    );
   }
 }

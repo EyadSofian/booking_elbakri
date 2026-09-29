@@ -18,11 +18,7 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
 
   THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
-  THROTTLE_LIMIT: z.coerce.number().int().positive().default(300),
-  AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
-
-  STORAGE_ROOT: z.string().default('./storage'),
-  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(25),
+  THROTTLE_LIMIT: z.coerce.number().int().positive().default(600),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   SWAGGER_ENABLED: z
@@ -34,7 +30,7 @@ const envSchema = z.object({
   APP_TIMEZONE: z.string().default('Africa/Cairo'),
 
   SEED_ADMIN_EMAIL: z.string().email().optional(),
-  SEED_ADMIN_PASSWORD: z.string().min(12).optional(),
+  SEED_ADMIN_PASSWORD: z.string().min(8).optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

@@ -1,18 +1,17 @@
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
+import type { Status } from '@elbakri/shared';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-2xs font-medium ' +
-    'whitespace-nowrap transition-colors',
+  'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[0.72rem] font-medium leading-4',
   {
     variants: {
       variant: {
         default: 'border-transparent bg-secondary text-secondary-foreground',
-        outline: 'border-border text-foreground',
+        outline: 'border-border text-muted-foreground',
+        sun: 'border-transparent bg-sun-subtle text-sun-foreground',
         success: 'border-transparent bg-success-subtle text-success',
-        warning: 'border-transparent bg-warning-subtle text-warning',
-        info: 'border-transparent bg-info-subtle text-info',
         danger: 'border-transparent bg-danger-subtle text-danger',
         brand: 'border-transparent bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-100',
       },
@@ -21,72 +20,17 @@ const badgeVariants = cva(
   },
 );
 
-export interface BadgeProps
-  extends React.HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof badgeVariants> {}
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {}
 
 export function Badge({ className, variant, ...props }: BadgeProps) {
   return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
-/**
- * Maps a canonical status value to a semantic colour.
- *
- * The value itself stays canonical — only the colour and the label vary, and
- * the label comes from the dictionary, never from the database.
- */
-export function statusVariant(status: string | null | undefined): BadgeProps['variant'] {
-  switch (status) {
-    case 'CONFIRMED':
-    case 'COMPLETED':
-    case 'APPROVED':
-    case 'PAID':
-    case 'CHECKED_OUT':
-    case 'RESOLVED':
-    case 'APPLIED':
-    case 'POSTED':
-      return 'success';
-    case 'IN_PROGRESS':
-    case 'CHECKED_IN':
-    case 'DISPATCHED':
-    case 'PICKED_UP':
-    case 'SUBMITTED':
-    case 'UNDER_REVIEW':
-    case 'ASSIGNED':
-    case 'ANALYZED':
-    case 'REVIEWING':
-      return 'info';
-    case 'ON_HOLD':
-    case 'DOCUMENTS_PENDING':
-    case 'PARTIALLY_PAID':
-    case 'REQUESTED':
-    case 'SCHEDULED':
-    case 'SUGGESTED':
-    case 'OPEN':
-      return 'warning';
-    case 'CANCELLED':
-    case 'REJECTED':
-    case 'NO_SHOW':
-    case 'FAILED':
-    case 'OVERPAID':
-    case 'REVERSED':
-      return 'danger';
-    case 'DRAFT':
-    case 'UPLOADED':
-    case 'IGNORED_WITH_REASON':
-      return 'default';
-    default:
-      return 'outline';
-  }
-}
-
-export function severityVariant(severity: string | null | undefined): BadgeProps['variant'] {
-  switch (severity) {
-    case 'ERROR': return 'danger';
-    case 'WARNING': return 'warning';
-    case 'INFO': return 'info';
-    default: return 'default';
-  }
-}
-
-export { badgeVariants };
+/** The colour of each status — identical on every screen. */
+export const STATUS_STYLE: Record<Status, { chip: string; dot: string }> = {
+  NEW: { chip: 'bg-st-new-bg text-st-new', dot: 'bg-st-new' },
+  IN_PROGRESS: { chip: 'bg-st-progress-bg text-st-progress', dot: 'bg-st-progress' },
+  CONFIRMED: { chip: 'bg-st-confirmed-bg text-st-confirmed', dot: 'bg-st-confirmed' },
+  DONE: { chip: 'bg-st-done-bg text-st-done', dot: 'bg-st-done' },
+  CANCELLED: { chip: 'bg-st-cancelled-bg text-st-cancelled', dot: 'bg-st-cancelled' },
+};

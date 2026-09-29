@@ -1,7 +1,7 @@
 import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PrismaService } from './common/services/prisma.service';
-import { Public } from './common/decorators';
+import { PrismaService } from './common/prisma.service';
+import { Public } from './common/auth';
 
 @ApiTags('health')
 // Version-neutral: a load balancer's probe should not have to track the API

@@ -14,9 +14,9 @@ describe('parseLegacyPhone — values stored as floats in the legacy sheets', ()
     expect(parseLegacyPhone(2250779040464).digits).toBe('2250779040464');
   });
   it('restores an Egyptian leading zero but marks it as an assumption', () => {
-    const r = parseLegacyPhone(1002998299);
-    expect(r.digits).toBe('01002998299');
-    expect(r.normalized).toBe('+201002998299');
+    const r = parseLegacyPhone(1000000001);
+    expect(r.digits).toBe('01000000001');
+    expect(r.normalized).toBe('+201000000001');
     expect(r.status).toBe(ParseStatus.AMBIGUOUS);
     expect(r.warnings).toContain('RESTORED_LEADING_ZERO_EGYPT');
   });
@@ -27,9 +27,9 @@ describe('parseLegacyPhone — values stored as floats in the legacy sheets', ()
     expect(r.normalized).toBe('+96176460597');
   });
   it('honours an explicit + prefix with full confidence', () => {
-    const r = parseLegacyPhone('+201002998299');
+    const r = parseLegacyPhone('+201000000001');
     expect(r.status).toBe(ParseStatus.PARSED);
-    expect(r.normalized).toBe('+201002998299');
+    expect(r.normalized).toBe('+201000000001');
   });
   it('converts a 00 international prefix', () => {
     const r = parseLegacyPhone('0096170545718');
@@ -37,9 +37,9 @@ describe('parseLegacyPhone — values stored as floats in the legacy sheets', ()
     expect(r.warnings).toContain('INTERNATIONAL_00_PREFIX');
   });
   it('preserves a leading zero present in a string', () => {
-    const r = parseLegacyPhone('01002998299');
-    expect(r.digits).toBe('01002998299');
-    expect(r.normalized).toBe('+201002998299');
+    const r = parseLegacyPhone('01000000001');
+    expect(r.digits).toBe('01000000001');
+    expect(r.normalized).toBe('+201000000001');
   });
   it('does not normalise a number it cannot attribute to a country', () => {
     const r = parseLegacyPhone('55512345');

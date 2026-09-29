@@ -1,24 +1,19 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Design tokens derived from the supplied ELBAKRI OVERSEAS brand asset.
+ * ELBAKRI OVERSEAS — a calm workspace built around the logo's navy.
  *
- * The logo's navy (#0F2352 family) is the single brand colour; everything else
- * is a neutral or a semantic status colour. This is an internal operations
- * tool, so the palette stays restrained and the emphasis goes on legibility and
- * density rather than decoration.
+ * Warm "paper" surfaces instead of cold grey (the team comes from Excel sheets
+ * and ledgers), the brand navy for structure, and one sun-amber accent for
+ * whatever needs attention today. Every booking status has its own colour,
+ * used identically on every screen.
  */
 const config: Config = {
   darkMode: ['class', '[data-theme="dark"]'],
-  content: [
-    './src/**/*.{ts,tsx}',
-    './src/app/**/*.{ts,tsx}',
-    './src/components/**/*.{ts,tsx}',
-  ],
+  content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // Brand navy sampled from the logo artwork.
         brand: {
           50: '#eef2fa',
           100: '#d8e1f3',
@@ -40,117 +35,66 @@ const config: Config = {
         surface: {
           DEFAULT: 'hsl(var(--surface))',
           muted: 'hsl(var(--surface-muted))',
-          raised: 'hsl(var(--surface-raised))',
+          sunken: 'hsl(var(--surface-sunken))',
         },
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
-        },
-        secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
-        },
-        muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
-        },
-        accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
-        },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
-        },
-        // Semantic status colours used by badges, alerts and the timeline.
-        success: {
-          DEFAULT: 'hsl(var(--success))',
-          foreground: 'hsl(var(--success-foreground))',
-          subtle: 'hsl(var(--success-subtle))',
-        },
-        warning: {
-          DEFAULT: 'hsl(var(--warning))',
-          foreground: 'hsl(var(--warning-foreground))',
-          subtle: 'hsl(var(--warning-subtle))',
-        },
-        info: {
-          DEFAULT: 'hsl(var(--info))',
-          foreground: 'hsl(var(--info-foreground))',
-          subtle: 'hsl(var(--info-subtle))',
-        },
-        danger: {
-          DEFAULT: 'hsl(var(--danger))',
-          foreground: 'hsl(var(--danger-foreground))',
-          subtle: 'hsl(var(--danger-subtle))',
-        },
-        popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
-        },
-        card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
+        primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
+        secondary: { DEFAULT: 'hsl(var(--secondary))', foreground: 'hsl(var(--secondary-foreground))' },
+        muted: { DEFAULT: 'hsl(var(--muted))', foreground: 'hsl(var(--muted-foreground))' },
+        accent: { DEFAULT: 'hsl(var(--accent))', foreground: 'hsl(var(--accent-foreground))' },
+        destructive: { DEFAULT: 'hsl(var(--destructive))', foreground: 'hsl(var(--destructive-foreground))' },
+        popover: { DEFAULT: 'hsl(var(--popover))', foreground: 'hsl(var(--popover-foreground))' },
+        card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+        sun: { DEFAULT: 'hsl(var(--sun))', subtle: 'hsl(var(--sun-subtle))', foreground: 'hsl(var(--sun-foreground))' },
+        success: { DEFAULT: 'hsl(var(--success))', subtle: 'hsl(var(--success-subtle))' },
+        danger: { DEFAULT: 'hsl(var(--danger))', subtle: 'hsl(var(--danger-subtle))' },
+        // One colour per booking status, the same on every screen.
+        st: {
+          new: 'hsl(var(--st-new))',
+          'new-bg': 'hsl(var(--st-new-bg))',
+          progress: 'hsl(var(--st-progress))',
+          'progress-bg': 'hsl(var(--st-progress-bg))',
+          confirmed: 'hsl(var(--st-confirmed))',
+          'confirmed-bg': 'hsl(var(--st-confirmed-bg))',
+          done: 'hsl(var(--st-done))',
+          'done-bg': 'hsl(var(--st-done-bg))',
+          cancelled: 'hsl(var(--st-cancelled))',
+          'cancelled-bg': 'hsl(var(--st-cancelled-bg))',
         },
       },
       borderRadius: {
+        xl: 'calc(var(--radius) + 4px)',
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        // Latin and Arabic faces are paired so a mixed-script row lines up.
-        sans: ['var(--font-latin)', 'var(--font-arabic)', 'system-ui', 'sans-serif'],
-        arabic: ['var(--font-arabic)', 'var(--font-latin)', 'system-ui', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
-        xs: ['0.75rem', { lineHeight: '1.1rem' }],
-        sm: ['0.8125rem', { lineHeight: '1.25rem' }],
-        base: ['0.875rem', { lineHeight: '1.375rem' }],
-        lg: ['1rem', { lineHeight: '1.5rem' }],
-        xl: ['1.125rem', { lineHeight: '1.625rem' }],
-        '2xl': ['1.375rem', { lineHeight: '1.875rem' }],
-        '3xl': ['1.75rem', { lineHeight: '2.125rem' }],
       },
       spacing: {
-        '4.5': '1.125rem',
-        '13': '3.25rem',
-        '15': '3.75rem',
-        '18': '4.5rem',
-        sidebar: '16rem',
-        'sidebar-collapsed': '4rem',
+        sidebar: '15rem',
         topbar: '3.5rem',
       },
       boxShadow: {
-        xs: '0 1px 2px 0 rgb(15 35 82 / 0.04)',
-        sm: '0 1px 3px 0 rgb(15 35 82 / 0.07), 0 1px 2px -1px rgb(15 35 82 / 0.05)',
-        md: '0 4px 10px -2px rgb(15 35 82 / 0.08), 0 2px 4px -2px rgb(15 35 82 / 0.05)',
-        lg: '0 12px 24px -6px rgb(15 35 82 / 0.10), 0 4px 8px -4px rgb(15 35 82 / 0.06)',
-        overlay: '0 20px 40px -12px rgb(6 15 38 / 0.28)',
+        xs: '0 1px 2px 0 rgb(15 35 82 / 0.05)',
+        sm: '0 1px 3px 0 rgb(15 35 82 / 0.08), 0 1px 2px -1px rgb(15 35 82 / 0.06)',
+        md: '0 6px 16px -6px rgb(15 35 82 / 0.14), 0 2px 4px -2px rgb(15 35 82 / 0.06)',
+        overlay: '0 24px 48px -16px rgb(6 15 38 / 0.35)',
       },
       keyframes: {
-        'accordion-down': {
-          from: { height: '0' },
-          to: { height: 'var(--radix-accordion-content-height)' },
-        },
-        'accordion-up': {
-          from: { height: 'var(--radix-accordion-content-height)' },
-          to: { height: '0' },
-        },
-        'fade-in': {
-          from: { opacity: '0' },
-          to: { opacity: '1' },
-        },
-        shimmer: {
-          '100%': { transform: 'translateX(100%)' },
-        },
+        'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
+        rise: { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'none' } },
+        'slide-in-end': { from: { transform: 'translateX(var(--slide-from, 100%))' }, to: { transform: 'none' } },
+        pop: { from: { opacity: '0', transform: 'scale(0.97)' }, to: { opacity: '1', transform: 'none' } },
       },
       animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
         'fade-in': 'fade-in 0.15s ease-out',
-        shimmer: 'shimmer 1.6s infinite',
+        rise: 'rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both',
+        'slide-in-end': 'slide-in-end 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        pop: 'pop 0.14s ease-out',
       },
     },
   },

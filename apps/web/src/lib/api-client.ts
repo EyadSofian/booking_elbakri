@@ -1,4 +1,4 @@
-import type { ApiErrorResponse, PaginatedResponse } from '@elbakri/shared';
+import type { ApiErrorResponse } from '@elbakri/shared';
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://localhost:4000';
@@ -96,32 +96,34 @@ function buildUrl(path: string, query?: Record<string, unknown>): string {
 
 /**
  * A single in-flight refresh shared by every request that hits a 401, so a page
- * with several parallel queries does not fire several refreshes and invalidate
- * its own rotating token.
+ * with several parallel queries refreshes once.
+ *
+ * Only a refresh the server actually rejects ends the session. A dropped
+ * connection or a server hiccup keeps the person signed in; the request simply
+ * fails and can be retried.
  */
-let refreshInFlight: Promise<boolean> | null = null;
+type RefreshOutcome = 'ok' | 'rejected' | 'unreachable';
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
 
-async function refreshSession(): Promise<boolean> {
+async function refreshSession(): Promise<RefreshOutcome> {
   if (refreshInFlight) return refreshInFlight;
 
-  refreshInFlight = (async () => {
+  refreshInFlight = (async (): Promise<RefreshOutcome> => {
     const refreshToken = tokenStore.refresh;
-    if (!refreshToken) return false;
+    if (!refreshToken) return 'rejected';
     try {
       const response = await fetch(buildUrl('/auth/refresh'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
-      if (!response.ok) {
-        tokenStore.clear();
-        return false;
-      }
+      if (response.status === 401) return 'rejected';
+      if (!response.ok) return 'unreachable';
       const data = (await response.json()) as { accessToken: string; refreshToken: string };
       tokenStore.set(data.accessToken, data.refreshToken);
-      return true;
+      return 'ok';
     } catch {
-      return false;
+      return 'unreachable';
     } finally {
       refreshInFlight = null;
     }
@@ -159,17 +161,19 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   // and muddies the error the user actually needs to see.
   const isAuthEndpoint = /^\/auth\/(login|refresh)$/.test(path);
   if (response.status === 401 && !skipRefresh && !isAuthEndpoint) {
-    const refreshed = await refreshSession();
-    if (refreshed) {
+    const outcome = await refreshSession();
+    if (outcome === 'ok') {
       try {
         response = await send();
       } catch {
         throw new ApiError('NETWORK', 'Could not reach the server.', 0);
       }
+    } else if (outcome === 'unreachable') {
+      throw new ApiError('NETWORK', 'Could not reach the server.', 0);
     } else {
       tokenStore.clear();
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
       }
     }
   }
@@ -195,6 +199,36 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return (await response.json()) as T;
 }
 
+/** Sends a raw request, refreshing an expired session once. */
+async function withAuthRetry(send: () => Promise<Response>): Promise<Response> {
+  let response: Response;
+  try {
+    response = await send();
+  } catch {
+    throw new ApiError('NETWORK', 'Could not reach the server.', 0);
+  }
+  if (response.status !== 401) return response;
+  const outcome = await refreshSession();
+  if (outcome !== 'ok') {
+    throw new ApiError(outcome === 'rejected' ? 'UNAUTHENTICATED' : 'NETWORK', 'Session ended.', outcome === 'rejected' ? 401 : 0);
+  }
+  try {
+    return await send();
+  } catch {
+    throw new ApiError('NETWORK', 'Could not reach the server.', 0);
+  }
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  const payload = (await response.json().catch(() => null)) as ApiErrorResponse | null;
+  return new ApiError(
+    payload?.error?.code ?? 'INTERNAL_ERROR',
+    payload?.error?.message ?? response.statusText,
+    response.status,
+    payload?.error?.details,
+  );
+}
+
 export const api = {
   get: <T>(path: string, query?: Record<string, unknown>) => apiRequest<T>(path, { method: 'GET', query }),
   post: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'POST', body }),
@@ -204,40 +238,27 @@ export const api = {
 
   /** Uploads a file with the auth header attached, without forcing a JSON body. */
   upload: async <T>(path: string, file: File, field = 'file'): Promise<T> => {
-    const form = new FormData();
-    form.append(field, file);
-    const token = tokenStore.access;
-    const response = await fetch(buildUrl(path), {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      body: form,
+    const response = await withAuthRetry(() => {
+      const form = new FormData();
+      form.append(field, file);
+      const token = tokenStore.access;
+      return fetch(buildUrl(path), {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: form,
+      });
     });
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as ApiErrorResponse | null;
-      throw new ApiError(
-        payload?.error?.code ?? 'INTERNAL_ERROR',
-        payload?.error?.message ?? response.statusText,
-        response.status,
-        payload?.error?.details,
-      );
-    }
+    if (!response.ok) throw await toApiError(response);
     return (await response.json()) as T;
   },
 
   /** Triggers a file download, preserving the server's filename. */
   download: async (path: string, query?: Record<string, unknown>): Promise<void> => {
-    const token = tokenStore.access;
-    const response = await fetch(buildUrl(path, query), {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    const response = await withAuthRetry(() => {
+      const token = tokenStore.access;
+      return fetch(buildUrl(path, query), { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
     });
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as ApiErrorResponse | null;
-      throw new ApiError(
-        payload?.error?.code ?? 'INTERNAL_ERROR',
-        payload?.error?.message ?? response.statusText,
-        response.status,
-      );
-    }
+    if (!response.ok) throw await toApiError(response);
     const disposition = response.headers.get('content-disposition') ?? '';
     const match = disposition.match(/filename="?([^"]+)"?/);
     const filename = match?.[1] ?? 'export.xlsx';
@@ -254,4 +275,3 @@ export const api = {
   },
 };
 
-export type { PaginatedResponse };

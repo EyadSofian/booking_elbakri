@@ -5,7 +5,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { ERROR_CODES } from '@elbakri/shared';
 import { AppModule } from './app.module';
-import { PrismaService } from './common/services/prisma.service';
 import { corsOrigins, type AppEnv } from './config/env';
 import { DomainError } from './common/errors';
 
@@ -67,15 +66,10 @@ async function bootstrap(): Promise<void> {
 
   if (env.SWAGGER_ENABLED) {
     const swagger = new DocumentBuilder()
-      .setTitle('ELBAKRI OVERSEAS — Operations API')
-      .setDescription(
-        'Booking, operations and finance management for ELBAKRI OVERSEAS. ' +
-          'All business rules, validation and permission checks are enforced here; ' +
-          'the web application renders responses from this API.',
-      )
-      .setVersion('1.0')
+      .setTitle('ELBAKRI OVERSEAS — Bookings API')
+      .setDescription('Sales and operations bookings for ELBAKRI OVERSEAS.')
+      .setVersion('2.0')
       .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
-      .addApiKey({ type: 'apiKey', name: 'Authorization', in: 'header', description: 'ApiKey <token>' }, 'apiKey')
       .build();
 
     const document = SwaggerModule.createDocument(app, swagger);
@@ -85,8 +79,6 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  const prisma = app.get(PrismaService);
-  prisma.enableShutdownHooks(app);
   app.enableShutdownHooks();
 
   await app.listen(env.PORT, '0.0.0.0');
