@@ -1,12 +1,13 @@
 import { Body, Controller, Delete, Get, HttpCode, Injectable, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiTags, PartialType } from '@nestjs/swagger';
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import type { Response } from 'express';
-import { TRANSFER_KINDS, type ListResponse, type Status, type TransferItem, type TransferKind } from '@elbakri/shared';
+import { TRANSFER_KINDS, formatRef, type ListResponse, type Status, type TransferItem, type TransferKind } from '@elbakri/shared';
 import { PrismaService } from '../../common/prisma.service';
 import { ActivityService } from '../../common/activity.service';
-import { NotFoundError } from '../../common/errors';
+import { NotFoundError, ValidationError } from '../../common/errors';
 import { CurrentUser, Roles, type AuthUser } from '../../common/auth';
 import { IsDateOnly, ListQueryDto, dateRange, skipTake, toCounts } from '../../common/list';
 import { clean, cleanTime, fromDbDate, toDbDate, todayIn } from '../../common/values';
@@ -51,6 +52,24 @@ export class TransferDto extends OpsBaseDto {
 }
 
 export class UpdateTransferDto extends PartialType(TransferDto) {}
+
+/** The way back, entered on the same form as the way there. */
+class ReturnLegDto {
+  @IsDateOnly()
+  date!: string;
+
+  @IsString() @MaxLength(20) @IsOptional()
+  time?: string | null;
+
+  @IsString() @MaxLength(40) @IsOptional()
+  flightNo?: string | null;
+}
+
+export class CreateTransferDto extends TransferDto {
+  /** Round trip: also records the return leg, places swapped. */
+  @ValidateNested() @Type(() => ReturnLegDto) @IsOptional()
+  returnTrip?: ReturnLegDto;
+}
 
 export class TransferListQuery extends ListQueryDto {
   @IsIn(TRANSFER_KINDS) @IsOptional()
@@ -174,20 +193,48 @@ export class TransfersService {
     };
   }
 
-  async create(dto: TransferDto, user: AuthUser): Promise<TransferItem> {
-    const data = this.data(dto);
+  async create(dto: CreateTransferDto, user: AuthUser): Promise<TransferItem> {
+    const { returnTrip, ...rest } = dto;
+    if (returnTrip && dto.date && returnTrip.date < dto.date) {
+      throw new ValidationError('The return cannot be before the way there.', 'RETURN_BEFORE_OUTBOUND');
+    }
+    const data = this.data(rest);
     data.agencyId = data.agencyId ?? (await defaultAgencyId(this.prisma, dto));
-    const row = await this.prisma.transfer.create({
-      data: {
-        ...data,
-        guestName: data.guestName!,
-        kind: data.kind ?? guessKind(data.fromPlace, data.toPlace),
-        createdById: user.id,
-      },
-      include,
-    });
-    await this.activity.log({ type: 'TRANSFER', id: row.id, action: 'CREATED', userId: user.id });
-    return this.toItem(row);
+    const kind = data.kind ?? guessKind(data.fromPlace, data.toPlace);
+    const outbound = { ...data, guestName: data.guestName!, kind, createdById: user.id };
+
+    if (!returnTrip) {
+      const row = await this.prisma.transfer.create({ data: outbound, include });
+      await this.activity.log({ type: 'TRANSFER', id: row.id, action: 'CREATED', userId: user.id });
+      return this.toItem(row);
+    }
+
+    // Round trip: two transfers, because each leg has its own day and driver.
+    // The price stays on the way there so it is not counted twice.
+    const [there, back] = await this.prisma.$transaction([
+      this.prisma.transfer.create({ data: outbound, include }),
+      this.prisma.transfer.create({
+        data: {
+          ...outbound,
+          kind: kind === 'ARRIVAL' ? 'DEPARTURE' : kind === 'DEPARTURE' ? 'ARRIVAL' : 'TRANSFER',
+          fromPlace: outbound.toPlace,
+          toPlace: outbound.fromPlace,
+          date: toDbDate(returnTrip.date),
+          time: cleanTime(returnTrip.time) ?? null,
+          flightNo: clean(returnTrip.flightNo)?.toUpperCase() ?? null,
+          driverName: null,
+          driverPhone: null,
+          vehicle: null,
+          cost: null,
+          sell: null,
+        },
+        include,
+      }),
+    ]);
+    const pair = `${formatRef('TRANSFER', there.number)} ⇄ ${formatRef('TRANSFER', back.number)}`;
+    await this.activity.log({ type: 'TRANSFER', id: there.id, action: 'CREATED', userId: user.id, summary: pair });
+    await this.activity.log({ type: 'TRANSFER', id: back.id, action: 'CREATED', userId: user.id, summary: pair });
+    return this.toItem(there);
   }
 
   async update(id: string, dto: UpdateTransferDto, user: AuthUser): Promise<TransferItem> {
@@ -280,7 +327,7 @@ export class TransfersController {
   }
 
   @Post()
-  create(@Body() dto: TransferDto, @CurrentUser() user: AuthUser) {
+  create(@Body() dto: CreateTransferDto, @CurrentUser() user: AuthUser) {
     return this.service.create(dto, user);
   }
 

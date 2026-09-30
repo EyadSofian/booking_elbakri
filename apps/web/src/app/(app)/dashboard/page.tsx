@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  AlarmClock, ArrowRight, BedDouble, CarFront, FileBadge, Hotel, LogIn, LogOut, ShoppingBag, TentTree, UserX,
+  AlarmClock, ArrowRight, BedDouble, CarFront, FileBadge, Hotel, LogIn, LogOut, ShoppingBag, TentTree, UserX, Wallet,
 } from 'lucide-react';
-import type { DashboardData, EntityType, Status } from '@elbakri/shared';
+import { hotelOwed, type DashboardData, type EntityType, type Status } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
 import { useI18n, useSession } from '@/lib/providers';
 import { useInvalidate } from '@/lib/queries';
@@ -19,6 +19,7 @@ import { DateText, Money, RefTag, Txt } from '@/components/shared/format';
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/shared/feedback';
 import { ENTITY_ROUTE } from '@/components/layout/global-search';
 import { RouteText } from '@/components/ops/transfers';
+import { DueBadge } from '@/components/ops/hotels';
 
 const ENDPOINT: Record<Exclude<EntityType, 'SALE'>, string> = {
   HOTEL: '/hotel-bookings',
@@ -181,6 +182,8 @@ export default function DashboardPage() {
         </section>
 
         <div className="space-y-5">
+          {is('OPERATIONS') ? <PaymentsCard data={d} /> : null}
+
           <section id="requests" className="overflow-hidden rounded-xl border bg-card shadow-xs animate-rise [animation-delay:190ms]">
             <header className="border-b px-4 py-3">
               <h2 className="text-sm font-semibold">{t.dashboard.requestsTitle}</h2>
@@ -282,6 +285,73 @@ export default function DashboardPage() {
         />
       </div>
     </div>
+  );
+}
+
+/** Hotels still owed money: late first, then today, tomorrow and the rest of the week. */
+function PaymentsCard({ data }: { data: DashboardData | undefined }) {
+  const { t } = useI18n();
+  const p = data?.payments;
+  const chips = p
+    ? [
+        { label: t.dashboard.overdue, value: p.overdue, cls: 'bg-danger-subtle text-danger' },
+        { label: t.common.today, value: p.today, cls: 'bg-sun-subtle text-sun-foreground' },
+        { label: t.common.tomorrow, value: p.tomorrow, cls: 'bg-sun-subtle text-sun-foreground' },
+      ].filter((c) => c.value > 0)
+    : [];
+  return (
+    <section className="overflow-hidden rounded-xl border bg-card shadow-xs animate-rise [animation-delay:175ms]">
+      <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Wallet className="size-4 text-muted-foreground" />
+            {t.dashboard.paymentsTitle}
+          </h2>
+          <p className="text-xs text-muted-foreground">{t.dashboard.paymentsHint}</p>
+        </div>
+        <Link href="/hotels?status=PAYMENT" className="inline-flex shrink-0 items-center gap-1 text-xs text-primary hover:underline">
+          {t.common.view}
+          <ArrowRight className="flip-rtl size-3" />
+        </Link>
+      </header>
+      {!p ? (
+        <RowsSkeleton rows={3} cols={3} />
+      ) : !p.items.length ? (
+        <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t.dashboard.paymentsEmpty}</p>
+      ) : (
+        <>
+          {chips.length ? (
+            <div className="flex flex-wrap gap-2 px-4 pt-3">
+              {chips.map((c) => (
+                <span key={c.label} className={cn('tabular rounded-full px-2.5 py-0.5 text-xs font-medium', c.cls)}>
+                  {c.label}: {c.value}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <ul className="scroll-thin max-h-72 divide-y overflow-y-auto">
+            {p.items.map((b) => (
+              <li key={b.id}>
+                <Link href={ENTITY_ROUTE.HOTEL(b.id)} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-muted">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      <Txt>{b.hotel?.name ?? '—'}</Txt>
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      <Txt>{b.guestName}</Txt> · {b.ref}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 flex-col items-end gap-1">
+                    <Money value={hotelOwed(b)} currency={b.currency} className="text-sm font-semibold" />
+                    <DueBadge b={b} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
 

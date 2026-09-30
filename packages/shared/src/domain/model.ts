@@ -161,6 +161,8 @@ export interface UserSummary {
   name: string;
   email: string;
   role: Role;
+  /** A sales supervisor: sees every salesperson's sales, not only their own. */
+  seesAllSales: boolean;
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -216,7 +218,19 @@ export interface HotelBookingItem extends OpsBase {
   bookingDate: string | null;
   confirmationNo: string | null;
   paidToHotel: number | null;
+  /** The day the hotel must be paid (when a balance is left). */
   hotelPaidOn: string | null;
+}
+
+/** What is still owed to the hotel; null when no cost is recorded. */
+export function hotelOwed(b: Pick<HotelBookingItem, 'cost' | 'paidToHotel'>): number | null {
+  if (b.cost == null) return null;
+  return round2(b.cost - (b.paidToHotel ?? 0));
+}
+
+/** When the hotel should be paid: the payment date, or the check-in when none is set. */
+export function hotelPaymentDue(b: Pick<HotelBookingItem, 'hotelPaidOn' | 'checkIn'>): string | null {
+  return b.hotelPaidOn ?? b.checkIn;
 }
 
 export interface TransferItem extends OpsBase {
@@ -320,6 +334,8 @@ export interface ListResponse<T> {
   page: number;
   pageSize: number;
   counts: StatusCounts;
+  /** Counts for tabs beyond the statuses, e.g. hotel payments due. */
+  extraCounts?: Record<string, number>;
 }
 
 export interface MoneyByCurrency {
@@ -354,6 +370,13 @@ export interface DashboardData {
     date: string | null;
     createdAt: string;
   }>;
+  /** Hotels still owed money, due within the week or already late. */
+  payments: {
+    overdue: number;
+    today: number;
+    tomorrow: number;
+    items: HotelBookingItem[];
+  };
   month: {
     label: string;
     sales: number;

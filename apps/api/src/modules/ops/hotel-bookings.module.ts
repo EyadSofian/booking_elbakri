@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiTags, PartialType } from '@nestjs/swagger';
 import { IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import type { Response } from 'express';
-import { countNights, type HotelBookingItem, type ListResponse, type Status } from '@elbakri/shared';
+import { countNights, hotelOwed, hotelPaymentDue, type HotelBookingItem, type ListResponse, type Status } from '@elbakri/shared';
 import { PrismaService } from '../../common/prisma.service';
 import { ActivityService } from '../../common/activity.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
@@ -60,9 +60,9 @@ export class HotelListQuery extends ListQueryDto {
   @IsUUID() @IsOptional()
   hotelId?: string;
 
-  /** `unpaid`: the hotel is still owed money on this booking. */
-  @IsIn(['unpaid']) @IsOptional()
-  payment?: 'unpaid';
+  /** `due`: the hotel is still owed money — the Payments tab, soonest first. */
+  @IsIn(['due']) @IsOptional()
+  payment?: 'due';
 
   /** Guests checking out today or tomorrow. */
   @IsIn(['today', 'tomorrow']) @IsOptional()
@@ -134,13 +134,14 @@ export class HotelBookingsService {
     ]);
     if (search) and.push(search);
     if (q.hotelId) and.push({ hotelId: q.hotelId });
-    if (q.payment === 'unpaid') and.push({ cost: { gt: 0 } }, { status: { not: 'CANCELLED' } });
     if (q.departing) {
       and.push({ checkOut: new Date(`${q.departing === 'today' ? today : todayIn(this.tz, 1)}T00:00:00Z`) });
     }
 
+    // Money owed to a hotel matters whatever the stay dates, so no date filter.
+    if (q.payment === 'due') and.push({ cost: { gt: 0 } }, { status: { not: 'CANCELLED' } });
     // For hotels, "upcoming" keeps guests who are still in the hotel.
-    if (q.when === 'upcoming') and.push({ checkOut: { gte: new Date(`${today}T00:00:00Z`) } });
+    else if (q.when === 'upcoming') and.push({ checkOut: { gte: new Date(`${today}T00:00:00Z`) } });
     else if (q.when === 'past') and.push({ checkOut: { lt: new Date(`${today}T00:00:00Z`) } });
     else {
       const range = dateRange(q, today, todayIn(this.tz, 1));
@@ -149,29 +150,42 @@ export class HotelBookingsService {
     return { AND: and };
   }
 
+  /**
+   * Bookings the hotel is still owed money on, the soonest payment first.
+   * "Still owed" compares two columns, so it is filtered after reading.
+   */
+  async paymentsDue(q: HotelListQuery = new HotelListQuery()): Promise<HotelBookingItem[]> {
+    const where = this.where(Object.assign(new HotelListQuery(), q, { payment: 'due', status: undefined }));
+    const rows = await this.prisma.hotelBooking.findMany({ where, include });
+    return rows
+      .map((r) => this.toItem(r))
+      .filter((b) => (hotelOwed(b) ?? 0) > 0)
+      .sort((a, b) => (hotelPaymentDue(a) ?? '9999').localeCompare(hotelPaymentDue(b) ?? '9999') || a.number - b.number);
+  }
+
   async list(q: HotelListQuery): Promise<ListResponse<HotelBookingItem>> {
+    const due = await this.paymentsDue(q);
+    const extraCounts = { PAYMENT: due.length };
+
+    if (q.payment === 'due') {
+      const { skip, take } = skipTake(q);
+      const base = this.where(Object.assign(new HotelListQuery(), q, { payment: undefined }));
+      const groups = await this.prisma.hotelBooking.groupBy({ by: ['status'], where: base, _count: { _all: true } });
+      return { data: due.slice(skip, skip + take), total: due.length, page: q.page, pageSize: q.pageSize, counts: toCounts(groups), extraCounts };
+    }
+
     const where = this.where(q);
     const filtered = q.status?.length ? { AND: [where, { status: { in: q.status } }] } : where;
     const fallback =
       q.when === 'upcoming' || q.when === 'today' || q.when === 'tomorrow'
         ? [{ checkIn: { sort: 'asc', nulls: 'last' } }, { number: 'desc' }]
         : [{ checkIn: { sort: 'desc', nulls: 'last' } }, { number: 'desc' }];
-
-    if (q.payment === 'unpaid') {
-      // "Still owed" compares two columns, so it is filtered after reading.
-      const rows = await this.prisma.hotelBooking.findMany({ where: filtered, include, orderBy: orderBy(q, SORTS, fallback) });
-      const owed = rows.map((r) => this.toItem(r)).filter((b) => (b.cost ?? 0) > (b.paidToHotel ?? 0));
-      const groups = await this.prisma.hotelBooking.groupBy({ by: ['status'], where, _count: { _all: true } });
-      const { skip, take } = skipTake(q);
-      return { data: owed.slice(skip, skip + take), total: owed.length, page: q.page, pageSize: q.pageSize, counts: toCounts(groups) };
-    }
-
     const [rows, total, groups] = await Promise.all([
       this.prisma.hotelBooking.findMany({ where: filtered, include, orderBy: orderBy(q, SORTS, fallback), ...skipTake(q) }),
       this.prisma.hotelBooking.count({ where: filtered }),
       this.prisma.hotelBooking.groupBy({ by: ['status'], where, _count: { _all: true } }),
     ]);
-    return { data: rows.map((r) => this.toItem(r)), total, page: q.page, pageSize: q.pageSize, counts: toCounts(groups) };
+    return { data: rows.map((r) => this.toItem(r)), total, page: q.page, pageSize: q.pageSize, counts: toCounts(groups), extraCounts };
   }
 
   private async mustFind(id: string): Promise<NonNullable<Row>> {
@@ -288,7 +302,8 @@ export class HotelBookingsService {
       { header: 'CURRENCY', width: 9, value: (b) => b.currency },
       { header: 'TOTAL PAYMENT', value: (b) => b.cost },
       { header: 'PAID', value: (b) => b.paidToHotel },
-      { header: 'REST', value: (b) => (b.cost == null ? null : Math.round(((b.cost ?? 0) - (b.paidToHotel ?? 0)) * 100) / 100) },
+      { header: 'REST', value: (b) => hotelOwed(b) },
+      { header: 'DATE OF PAYMENT', width: 13, value: (b) => b.hotelPaidOn },
       { header: 'SELL', value: (b) => b.sell },
       { header: 'NOTES', width: 30, value: (b) => b.notes },
     ], data);

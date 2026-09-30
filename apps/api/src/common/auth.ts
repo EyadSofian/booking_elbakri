@@ -18,6 +18,8 @@ export interface AuthUser {
   name: string;
   email: string;
   role: Role;
+  /** A sales supervisor: sees every salesperson's sales. */
+  seesAllSales: boolean;
   sessionId: string;
 }
 

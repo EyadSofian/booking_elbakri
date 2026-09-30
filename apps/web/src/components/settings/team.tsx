@@ -53,7 +53,7 @@ export function TeamTab() {
                   <p>{t.settings.lastLogin}</p>
                   <p>{u.lastLoginAt ? formatDateTime(u.lastLoginAt, locale) : t.settings.never}</p>
                 </div>
-                <Badge variant={u.role === 'ADMIN' ? 'brand' : 'default'}>{t.roles[u.role]}</Badge>
+                <Badge variant={u.role === 'ADMIN' ? 'brand' : 'default'}>{u.seesAllSales ? t.settings.supervisor : t.roles[u.role]}</Badge>
                 {!u.isActive ? <Badge variant="danger">{t.settings.inactive}</Badge> : null}
                 <Button variant="ghost" size="icon-sm" onClick={() => setEditing(u)} aria-label={t.settings.editUser}>
                   <Pencil />
@@ -75,14 +75,15 @@ function UserDialog({ user, onClose }: { user: UserSummary | null; onClose: () =
   const [email, setEmail] = React.useState(user?.email ?? '');
   const [role, setRole] = React.useState<Role>(user?.role ?? 'OPERATIONS');
   const [active, setActive] = React.useState(user?.isActive ?? true);
+  const [seesAllSales, setSeesAllSales] = React.useState(user?.seesAllSales ?? false);
   const [password, setPassword] = React.useState('');
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const save = useMutation({
     mutationFn: () =>
       user
-        ? api.patch(`/users/${user.id}`, { name, email, role, isActive: active, password: password || undefined })
-        : api.post('/users', { name, email, role, password }),
+        ? api.patch(`/users/${user.id}`, { name, email, role, seesAllSales, isActive: active, password: password || undefined })
+        : api.post('/users', { name, email, role, seesAllSales, password }),
     onSuccess: () => {
       toast.success(t.common.saved);
       void qc.invalidateQueries({ queryKey: ['/users'] });
@@ -140,6 +141,20 @@ function UserDialog({ user, onClose }: { user: UserSummary | null; onClose: () =
                 ))}
               </div>
             </Field>
+            {role === 'SALES' ? (
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={seesAllSales}
+                  onChange={(e) => setSeesAllSales(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[hsl(var(--primary))]"
+                />
+                <span>
+                  <span className="block font-medium">{t.settings.seesAllSales}</span>
+                  <span className="block text-xs text-muted-foreground">{t.settings.seesAllSalesHint}</span>
+                </span>
+              </label>
+            ) : null}
             <Field
               label={user ? t.settings.resetPassword : t.settings.newPassword}
               htmlFor="u-password"

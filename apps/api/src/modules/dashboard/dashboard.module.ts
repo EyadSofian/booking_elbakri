@@ -2,7 +2,7 @@ import { Controller, Get, Injectable, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
-import { OPEN_STATUSES, type DashboardData, type EntityType, type Status } from '@elbakri/shared';
+import { OPEN_STATUSES, hotelPaymentDue, type DashboardData, type EntityType, type HotelBookingItem, type Status } from '@elbakri/shared';
 import { PrismaService } from '../../common/prisma.service';
 import { CurrentUser, Roles, type AuthUser } from '../../common/auth';
 import { IsDateOnly, ListQueryDto } from '../../common/list';
@@ -102,6 +102,18 @@ export class DashboardService {
       .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'))
       .slice(0, 20);
 
+    // Hotel payments: anything late, and whatever falls due within the week.
+    const weekEnd = todayIn(this.tz, 7);
+    const tomorrow = todayIn(this.tz, 1);
+    const due = (await this.hotels.paymentsDue()).filter((b) => (hotelPaymentDue(b) ?? '9999') <= weekEnd);
+    const dueOn = (b: HotelBookingItem) => hotelPaymentDue(b) ?? '';
+    const payments: DashboardData['payments'] = {
+      overdue: due.filter((b) => dueOn(b) < today).length,
+      today: due.filter((b) => dueOn(b) === today).length,
+      tomorrow: due.filter((b) => dueOn(b) === tomorrow).length,
+      items: due.slice(0, 30),
+    };
+
     let month: DashboardData['month'] = null;
     if (user.role === 'ADMIN' || user.role === 'SALES') {
       const monthSales = await this.sales.list(
@@ -141,6 +153,7 @@ export class DashboardService {
       transfers: transfers.map((t) => this.transfers.toItem(t)),
       excursions: excursions.map((x) => this.excursions.toItem(x)),
       requests,
+      payments,
       month,
     };
   }

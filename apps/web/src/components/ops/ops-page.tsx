@@ -69,6 +69,11 @@ export interface OpsConfig<T extends OpsBase> {
   toPayload: (draft: Draft) => Record<string, unknown>;
   validate: (draft: Draft, t: Dictionary) => Record<string, string>;
   fromSale: (sale: SaleDetail) => Draft;
+  /**
+   * One more tab after the statuses, e.g. hotel payments due. It lists by its
+   * own params, whatever the date filter, and its count comes from `extraCounts`.
+   */
+  extraTab?: { value: string; label: (t: Dictionary) => string; params: Record<string, string> };
   /** More actions on a booking, e.g. "add the return transfer". Returns a new draft to open. */
   extraActions?: (row: T, ctx: Ctx) => Array<{ label: string; icon: LucideIcon; draft: Draft }>;
 }
@@ -112,9 +117,10 @@ export function OpsPage<T extends OpsBase>({ config }: { config: OpsConfig<T> })
     [params, pathname, router],
   );
 
+  const extraTab = config.extraTab && status === config.extraTab.value ? config.extraTab : null;
   const listParams = {
-    when: when === 'all' ? undefined : when,
-    status: status || undefined,
+    when: when === 'all' || extraTab ? undefined : when,
+    status: extraTab ? undefined : status || undefined,
     q: q || undefined,
     agencyId: agencyId || undefined,
     page,
@@ -122,6 +128,7 @@ export function OpsPage<T extends OpsBase>({ config }: { config: OpsConfig<T> })
     sortBy: sortBy || undefined,
     sortDir: sortBy ? sortDir : undefined,
     ...extra,
+    ...extraTab?.params,
   };
   const list = useList<T>(config.endpoint, listParams);
   const invalidate = useInvalidate();
@@ -207,12 +214,14 @@ export function OpsPage<T extends OpsBase>({ config }: { config: OpsConfig<T> })
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2 animate-rise [animation-delay:60ms]">
-        <Segmented<When>
-          name="when"
-          value={when}
-          onChange={(w) => setParams({ when: w === 'upcoming' ? null : w })}
-          options={whenOptions.map((w) => ({ value: w, label: whenText(w) }))}
-        />
+        {extraTab ? null : (
+          <Segmented<When>
+            name="when"
+            value={when}
+            onChange={(w) => setParams({ when: w === 'upcoming' ? null : w })}
+            options={whenOptions.map((w) => ({ value: w, label: whenText(w) }))}
+          />
+        )}
         <SearchBox value={q} onChange={(v) => setParams({ q: v })} placeholder={config.searchPlaceholder(t)} className="min-w-[14rem] flex-1" />
         <AgencyFilter value={agencyId} onChange={(v) => setParams({ agency: v })} />
         {(config.filters ?? []).map((f) => (
@@ -245,6 +254,9 @@ export function OpsPage<T extends OpsBase>({ config }: { config: OpsConfig<T> })
               label: statusLabel(s, config.type),
               count: counts?.[s] ?? null,
             })),
+            ...(config.extraTab
+              ? [{ value: config.extraTab.value, label: config.extraTab.label(t), count: list.data?.extraCounts?.[config.extraTab.value] ?? null }]
+              : []),
           ]}
         />
       </div>

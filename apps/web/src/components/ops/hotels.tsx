@@ -1,8 +1,9 @@
 'use client';
 
 import { Hotel } from 'lucide-react';
-import { countNights, roomsText, type HotelBookingItem } from '@elbakri/shared';
+import { countNights, hotelOwed, hotelPaymentDue, roomsText, type HotelBookingItem } from '@elbakri/shared';
 import { useI18n } from '@/lib/providers';
+import { todayIso } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Field, FormSection } from '@/components/shared/field';
@@ -14,22 +15,40 @@ import { AgencyCell, GuestCell, Sub, baseEmpty, baseFromSale, basePayload, baseT
 import { CurrencySelect } from '@/components/shared/pickers';
 import { asCurrency } from './draft';
 
-function owed(b: HotelBookingItem): number | null {
-  if (b.cost == null) return null;
-  return Math.round(((b.cost ?? 0) - (b.paidToHotel ?? 0)) * 100) / 100;
+/** When the hotel must be paid: late, today, tomorrow, or the date. */
+export function DueBadge({ b }: { b: HotelBookingItem }) {
+  const { t } = useI18n();
+  const due = hotelPaymentDue(b);
+  if (!due || b.status === 'CANCELLED' || (hotelOwed(b) ?? 0) <= 0) return null;
+  const today = todayIso();
+  if (due < today) {
+    return (
+      <Badge variant="danger">
+        {t.hotels.overdue} · <DateText value={due} />
+      </Badge>
+    );
+  }
+  if (due === today) return <Badge variant="sun">{t.hotels.dueToday}</Badge>;
+  if (due === todayIso(1)) return <Badge variant="sun">{t.hotels.dueTomorrow}</Badge>;
+  return (
+    <Badge variant="outline">
+      {t.hotels.hotelPaidOn} · <DateText value={due} />
+    </Badge>
+  );
 }
 
 function PaymentCell({ b }: { b: HotelBookingItem }) {
   const { t } = useI18n();
-  const rest = owed(b);
+  const rest = hotelOwed(b);
   if (rest === null) return <span className="text-muted-foreground/60">—</span>;
   if (rest <= 0) return <Badge variant="success">{t.hotels.paidUp}</Badge>;
   return (
-    <div className="whitespace-nowrap">
+    <div className="space-y-1 whitespace-nowrap">
       <Money value={rest} currency={b.currency} className="font-medium text-sun-foreground dark:text-sun" />
       <Sub>
         {t.hotels.dueShort} <Money value={b.cost} currency={b.currency} muted />
       </Sub>
+      <DueBadge b={b} />
     </div>
   );
 }
@@ -107,7 +126,7 @@ function HotelForm({ draft, set, errors }: FormProps<HotelBookingItem>) {
           <Field label={t.hotels.paidToHotel} htmlFor="f-paidToHotel">
             <MoneyInput id="f-paidToHotel" value={draft.paidToHotel} onChange={(v) => set('paidToHotel', v)} />
           </Field>
-          <Field label={t.hotels.hotelPaidOn} htmlFor="f-hotelPaidOn">
+          <Field label={t.hotels.hotelPaidOn} htmlFor="f-hotelPaidOn" hint={t.hotels.hotelPaidOnHint}>
             <Input id="f-hotelPaidOn" type="date" value={draft.hotelPaidOn} onChange={(e) => set('hotelPaidOn', e.target.value)} />
           </Field>
           <Field label={t.hotels.sellToCustomer} htmlFor="f-sell">
@@ -187,15 +206,9 @@ export const hotelsConfig: OpsConfig<HotelBookingItem> = {
         { value: 'tomorrow', label: `${t.hotels.checkOut}: ${t.common.tomorrow}` },
       ],
     },
-    {
-      param: 'payment',
-      label: (t) => t.hotels.hotelPayment,
-      options: (t) => [
-        { value: '', label: `${t.hotels.hotelPayment}: ${t.common.all}` },
-        { value: 'unpaid', label: t.hotels.unpaid },
-      ],
-    },
   ],
+  // Next to the status tabs: every booking the hotel is still owed money on.
+  extraTab: { value: 'PAYMENT', label: (t) => t.hotels.paymentsTab, params: { payment: 'due' } },
   headline: (b, { t }) => ({
     title: b.guestName,
     subtitle: (

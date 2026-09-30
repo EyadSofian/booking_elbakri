@@ -44,9 +44,10 @@ export function RouteText({ from, to, className }: { from: string | null; to: st
   );
 }
 
-function TransferForm({ draft, set, errors }: FormProps<TransferItem>) {
+function TransferForm({ draft, set, errors, record }: FormProps<TransferItem>) {
   const { t } = useI18n();
   const kind = (draft.kind || guessKind(draft.fromPlace, draft.toPlace)) as TransferKind;
+  const roundTrip = draft.roundTrip === '1';
   return (
     <>
       <GuestFields draft={draft} set={set} errors={errors} withPax />
@@ -79,8 +80,47 @@ function TransferForm({ draft, set, errors }: FormProps<TransferItem>) {
           <Field label={t.transfers.flight} htmlFor="f-flightNo">
             <Input id="f-flightNo" dir="ltr" className="uppercase" value={draft.flightNo} onChange={(e) => set('flightNo', e.target.value)} placeholder="MS 710" />
           </Field>
+          {/* A new booking can carry its way back; an existing leg is edited on its own. */}
+          {record ? null : (
+            <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={roundTrip}
+                onChange={(e) => set('roundTrip', e.target.checked ? '1' : '')}
+                className="size-4 accent-[hsl(var(--primary))]"
+              />
+              <Repeat2 className="size-4 text-muted-foreground" />
+              {t.transfers.roundTrip}
+            </label>
+          )}
         </div>
       </FormSection>
+
+      {!record && roundTrip ? (
+        <FormSection title={t.transfers.returnSection} hint={t.transfers.roundTripHint}>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label={t.transfers.returnDate} htmlFor="f-returnDate" required error={errors.returnDate}>
+              <Input
+                id="f-returnDate"
+                type="date"
+                min={draft.date || undefined}
+                value={draft.returnDate}
+                onChange={(e) => set('returnDate', e.target.value)}
+                invalid={Boolean(errors.returnDate)}
+              />
+            </Field>
+            <Field label={t.transfers.returnPickup} htmlFor="f-returnTime">
+              <Input id="f-returnTime" type="time" value={draft.returnTime} onChange={(e) => set('returnTime', e.target.value)} />
+            </Field>
+            <Field label={t.transfers.returnFlight} htmlFor="f-returnFlightNo">
+              <Input id="f-returnFlightNo" dir="ltr" className="uppercase" value={draft.returnFlightNo} onChange={(e) => set('returnFlightNo', e.target.value)} />
+            </Field>
+            <p className="text-xs text-muted-foreground sm:col-span-3">
+              <RouteText from={draft.toPlace || null} to={draft.fromPlace || null} />
+            </p>
+          </div>
+        </FormSection>
+      ) : null}
 
       <FormSection title={t.transfers.driverSection}>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -242,7 +282,10 @@ export const transfersConfig: OpsConfig<TransferItem> = {
   ],
   Form: TransferForm,
   emptyDraft: () =>
-    baseEmpty({ kind: '', adults: '', children: '', date: '', time: '', fromPlace: '', toPlace: '', flightNo: '', driverName: '', driverPhone: '', vehicle: '' }),
+    baseEmpty({
+      kind: '', adults: '', children: '', date: '', time: '', fromPlace: '', toPlace: '', flightNo: '', driverName: '', driverPhone: '', vehicle: '',
+      roundTrip: '', returnDate: '', returnTime: '', returnFlightNo: '',
+    }),
   toDraft: (r) => ({
     ...baseToDraft(r),
     kind: r.kind,
@@ -270,8 +313,15 @@ export const transfersConfig: OpsConfig<TransferItem> = {
     driverName: str(d.driverName),
     driverPhone: str(d.driverPhone),
     vehicle: str(d.vehicle),
+    returnTrip: d.roundTrip === '1' ? { date: d.returnDate, time: str(d.returnTime), flightNo: str(d.returnFlightNo) } : undefined,
   }),
-  validate: (d, t) => requireFields(d, t, ['guestName', 'date']),
+  validate: (d, t) => {
+    const errors = requireFields(d, t, ['guestName', 'date']);
+    if (d.roundTrip === '1') {
+      errors.returnDate = !d.returnDate ? t.common.required : d.date && d.returnDate < d.date ? t.errors.RETURN_BEFORE_OUTBOUND : '';
+    }
+    return errors;
+  },
   fromSale: (s) =>
     baseFromSale(s, {
       kind: 'ARRIVAL',
@@ -288,6 +338,11 @@ export const transfersConfig: OpsConfig<TransferItem> = {
       cost: s.transferCost ? toStr(s.transferCost) : '',
       sell: s.transferSell ? toStr(s.transferSell) : '',
       notes: s.transferDetails ?? '',
+      // A trip with an end date usually needs the ride back too.
+      roundTrip: s.endDate ? '1' : '',
+      returnDate: toStr(s.endDate),
+      returnTime: '',
+      returnFlightNo: '',
     }),
   extraActions: (r, { t }) => [
     {

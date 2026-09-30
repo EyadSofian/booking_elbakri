@@ -54,6 +54,8 @@ model User {
   email        String    @unique
   passwordHash String
   role         Role      @default(OPERATIONS)
+  /// A sales supervisor sees every salesperson's sales; other salespeople see only their own.
+  seesAllSales Boolean   @default(false)
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())

@@ -48,7 +48,7 @@ export class AuthGuard implements CanActivate {
       select: {
         revokedAt: true,
         expiresAt: true,
-        user: { select: { id: true, name: true, email: true, role: true, isActive: true } },
+        user: { select: { id: true, name: true, email: true, role: true, seesAllSales: true, isActive: true } },
       },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date() || !session.user.isActive) {
@@ -60,6 +60,7 @@ export class AuthGuard implements CanActivate {
       name: session.user.name,
       email: session.user.email,
       role: session.user.role,
+      seesAllSales: session.user.seesAllSales,
       sessionId: payload.sid,
     };
     request.user = user;

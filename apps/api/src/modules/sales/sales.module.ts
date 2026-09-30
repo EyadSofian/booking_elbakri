@@ -190,10 +190,10 @@ export class SalesService {
 
   /**
    * A salesperson only ever sees their own sales — the ones they sold or
-   * entered. Admin and operations are not narrowed.
+   * entered. Admin, operations and sales supervisors are not narrowed.
    */
   private scope(user?: AuthUser): Record<string, unknown> {
-    return user?.role === 'SALES' ? { OR: [{ sellerId: user.id }, { createdById: user.id }] } : {};
+    return user?.role === 'SALES' && !user.seesAllSales ? { OR: [{ sellerId: user.id }, { createdById: user.id }] } : {};
   }
 
   /** Sales visible to this user (the open-request badge and the home page count these). */

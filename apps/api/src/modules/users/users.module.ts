@@ -17,6 +17,9 @@ class CreateUserDto {
   @IsIn(ROLES)
   role!: Role;
 
+  @IsBoolean() @IsOptional()
+  seesAllSales?: boolean;
+
   @IsString() @MinLength(8) @MaxLength(200)
   password!: string;
 }
@@ -32,6 +35,9 @@ class UpdateUserDto {
   role?: Role;
 
   @IsBoolean() @IsOptional()
+  seesAllSales?: boolean;
+
+  @IsBoolean() @IsOptional()
   isActive?: boolean;
 
   /** Sets a new password for the user (an admin reset). */
@@ -39,9 +45,9 @@ class UpdateUserDto {
   password?: string;
 }
 
-const SELECT = { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true, createdAt: true } as const;
+const SELECT = { id: true, name: true, email: true, role: true, seesAllSales: true, isActive: true, lastLoginAt: true, createdAt: true } as const;
 
-function toSummary(u: { id: string; name: string; email: string; role: Role; isActive: boolean; lastLoginAt: Date | null; createdAt: Date }): UserSummary {
+function toSummary(u: { id: string; name: string; email: string; role: Role; seesAllSales: boolean; isActive: boolean; lastLoginAt: Date | null; createdAt: Date }): UserSummary {
   return { ...u, lastLoginAt: u.lastLoginAt?.toISOString() ?? null, createdAt: u.createdAt.toISOString() };
 }
 
@@ -69,7 +75,13 @@ export class UsersService {
       throw new ConflictError('A user with this email already exists.');
     }
     const user = await this.prisma.user.create({
-      data: { name: dto.name.trim(), email, role: dto.role, passwordHash: await AuthService.hashPassword(dto.password) },
+      data: {
+        name: dto.name.trim(),
+        email,
+        role: dto.role,
+        seesAllSales: dto.role === 'SALES' && Boolean(dto.seesAllSales),
+        passwordHash: await AuthService.hashPassword(dto.password),
+      },
       select: SELECT,
     });
     return toSummary(user);
@@ -98,6 +110,8 @@ export class UsersService {
         name: dto.name?.trim(),
         email: dto.email?.toLowerCase().trim(),
         role: dto.role,
+        // Only a salesperson can be a sales supervisor.
+        seesAllSales: (dto.role ?? user.role) === 'SALES' ? dto.seesAllSales : false,
         isActive: dto.isActive,
         passwordHash: dto.password ? await AuthService.hashPassword(dto.password) : undefined,
       },
