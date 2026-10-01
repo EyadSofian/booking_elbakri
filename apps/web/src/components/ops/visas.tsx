@@ -8,7 +8,7 @@ import { Field, FormSection } from '@/components/shared/field';
 import { DateText, Money } from '@/components/shared/format';
 import type { FormProps, OpsConfig } from './ops-page';
 import { GuestFields, PriceFields, StatusAndNotes } from './form-parts';
-import { AgencyCell, GuestCell, Sub, baseEmpty, baseFromSale, basePayload, baseToDraft, int, priceItems, refColumn, requireFields, str, toStr } from './common';
+import { AgencyCell, GuestCell, Sub, baseEmpty, basePayload, baseToDraft, int, priceItems, refColumn, requireFields, str, toStr } from './common';
 import { RouteText } from './transfers';
 
 function VisaForm({ draft, set, errors }: FormProps<VisaItem>) {
@@ -131,12 +131,4 @@ export const visasConfig: OpsConfig<VisaItem> = {
     passportNo: str(d.passportNo),
   }),
   validate: (d, t) => requireFields(d, t, ['guestName']),
-  fromSale: (s) =>
-    baseFromSale(s, {
-      pax: String(Math.max(1, (s.adults ?? 0) + (s.children ?? 0))),
-      fromPlace: '',
-      toPlace: '',
-      travelDate: toStr(s.startDate),
-      passportNo: '',
-    }),
 };

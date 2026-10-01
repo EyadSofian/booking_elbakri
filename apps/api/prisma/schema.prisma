@@ -131,8 +131,10 @@ model Hotel {
 // Sales
 // ---------------------------------------------------------------------------
 
-/// One row of the sales sheet. Profit, commission and the customer balance are
-/// always calculated from these figures — never typed.
+/// One customer booking. What was sold — any number of hotels, flights,
+/// transfers and services — is in its lines. Profit, commission and the
+/// customer balance are always calculated from the lines, never typed.
+/// Sales are kept entirely apart from operations: no booking is linked to a sale.
 model Sale {
   id           String    @id @default(uuid()) @db.Uuid
   number       Int       @unique @default(autoincrement())
@@ -143,28 +145,11 @@ model Sale {
   nationality  String?
   phone        String?
   destination  String?
-  hotelName    String?
   adults       Int       @default(1)
   children     Int       @default(0)
-  singleRooms  Int       @default(0)
-  doubleRooms  Int       @default(0)
-  tripleRooms  Int       @default(0)
   startDate    DateTime? @db.Date
   endDate      DateTime? @db.Date
   currency     Currency  @default(EGP)
-
-  hotelCost        Decimal @default(0) @db.Decimal(12, 2)
-  hotelSell        Decimal @default(0) @db.Decimal(12, 2)
-  flightDetails    String?
-  flightCost       Decimal @default(0) @db.Decimal(12, 2)
-  flightSell       Decimal @default(0) @db.Decimal(12, 2)
-  flightCommission Decimal @default(0) @db.Decimal(12, 2)
-  transferDetails  String?
-  transferCost     Decimal @default(0) @db.Decimal(12, 2)
-  transferSell     Decimal @default(0) @db.Decimal(12, 2)
-  serviceType      String?
-  serviceCost      Decimal @default(0) @db.Decimal(12, 2)
-  serviceSell      Decimal @default(0) @db.Decimal(12, 2)
 
   sellerId       String?  @db.Uuid
   seller         User?    @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: SetNull)
@@ -177,11 +162,8 @@ model Sale {
   updatedAt      DateTime @updatedAt
   deletedAt      DateTime?
 
-  payments      SalePayment[]
-  hotelBookings HotelBooking[]
-  transfers     Transfer[]
-  excursions    Excursion[]
-  visas         Visa[]
+  lines    SaleLine[]
+  payments SalePayment[]
 
   @@index([status])
   @@index([saleDate])
@@ -189,6 +171,38 @@ model Sale {
   @@index([sellerId])
   @@index([deletedAt])
   @@map("sales")
+}
+
+enum SaleLineKind {
+  HOTEL
+  FLIGHT
+  TRANSFER
+  SERVICE
+}
+
+/// One thing sold on a sale: a hotel stay, a flight, a transfer or a service.
+model SaleLine {
+  id          String       @id @default(uuid()) @db.Uuid
+  saleId      String       @db.Uuid
+  sale        Sale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  position    Int          @default(0)
+  kind        SaleLineKind
+  /// The hotel name, flight details, transfer route or service type.
+  title       String?
+  /// Check-in for a hotel; the day of a flight, transfer or service.
+  startDate   DateTime?    @db.Date
+  /// Check-out for a hotel.
+  endDate     DateTime?    @db.Date
+  singleRooms Int          @default(0)
+  doubleRooms Int          @default(0)
+  tripleRooms Int          @default(0)
+  cost        Decimal      @default(0) @db.Decimal(12, 2)
+  sell        Decimal      @default(0) @db.Decimal(12, 2)
+  /// Flights only: paid out on the ticket, counted as a cost (sheet: عمولة الطيران).
+  commission  Decimal      @default(0) @db.Decimal(12, 2)
+
+  @@index([saleId])
+  @@map("sale_lines")
 }
 
 model SalePayment {
@@ -237,8 +251,6 @@ model HotelBooking {
   paidToHotel    Decimal?  @db.Decimal(12, 2)
   hotelPaidOn    DateTime? @db.Date
   notes          String?
-  saleId         String?   @db.Uuid
-  sale           Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
   sourceKey      String?   @unique
   createdById    String?   @db.Uuid
   createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -251,7 +263,6 @@ model HotelBooking {
   @@index([status])
   @@index([agencyId])
   @@index([hotelId])
-  @@index([saleId])
   @@index([deletedAt])
   @@map("hotel_bookings")
 }
@@ -281,8 +292,6 @@ model Transfer {
   cost        Decimal?     @db.Decimal(12, 2)
   sell        Decimal?     @db.Decimal(12, 2)
   notes       String?
-  saleId      String?      @db.Uuid
-  sale        Sale?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
   sourceKey   String?      @unique
   createdById String?      @db.Uuid
   createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -293,7 +302,6 @@ model Transfer {
   @@index([date])
   @@index([status])
   @@index([agencyId])
-  @@index([saleId])
   @@index([deletedAt])
   @@map("transfers")
 }
@@ -317,8 +325,6 @@ model Excursion {
   cost        Decimal?  @db.Decimal(12, 2)
   sell        Decimal?  @db.Decimal(12, 2)
   notes       String?
-  saleId      String?   @db.Uuid
-  sale        Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
   sourceKey   String?   @unique
   createdById String?   @db.Uuid
   createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -329,7 +335,6 @@ model Excursion {
   @@index([date])
   @@index([status])
   @@index([agencyId])
-  @@index([saleId])
   @@index([deletedAt])
   @@map("excursions")
 }
@@ -354,8 +359,6 @@ model Visa {
   /// The visa sheet's SELL.
   sell        Decimal?  @db.Decimal(12, 2)
   notes       String?
-  saleId      String?   @db.Uuid
-  sale        Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
   sourceKey   String?   @unique
   createdById String?   @db.Uuid
   createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -366,7 +369,6 @@ model Visa {
   @@index([travelDate])
   @@index([status])
   @@index([agencyId])
-  @@index([saleId])
   @@index([deletedAt])
   @@map("visas")
 }

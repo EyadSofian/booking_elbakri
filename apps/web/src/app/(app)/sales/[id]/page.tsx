@@ -5,12 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  ArrowLeft, ArrowRight, BedDouble, CarFront, FileBadge, MoreHorizontal, Pencil, Plane, Plus, Sparkles, TentTree, Trash2, X,
-} from 'lucide-react';
-import {
-  PAYMENT_METHODS, type EntityType, type SaleDetail, type SalePaymentMethod, type Status,
-} from '@elbakri/shared';
+import { ArrowLeft, ArrowRight, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { PAYMENT_METHODS, roomsText, type SaleDetail, type SalePaymentMethod, type Status } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
 import { useI18n, useSession } from '@/lib/providers';
 import { useActivity, useInvalidate, useRecord } from '@/lib/queries';
@@ -26,14 +22,7 @@ import { ConfirmDialog, ErrorState, RowsSkeleton } from '@/components/shared/fee
 import { Field } from '@/components/shared/field';
 import { MoneyInput } from '@/components/ops/form-parts';
 import { num } from '@/components/ops/draft';
-import { ENTITY_ROUTE } from '@/components/layout/global-search';
-
-const OPS: Array<{ type: Exclude<EntityType, 'SALE'>; endpoint: string; page: string; icon: typeof BedDouble }> = [
-  { type: 'HOTEL', endpoint: '/hotel-bookings', page: '/hotels', icon: BedDouble },
-  { type: 'TRANSFER', endpoint: '/transfers', page: '/transfers', icon: CarFront },
-  { type: 'EXCURSION', endpoint: '/excursions', page: '/excursions', icon: TentTree },
-  { type: 'VISA', endpoint: '/visas', page: '/visas', icon: FileBadge },
-];
+import { LINE_ICON, lineLabel } from '@/components/sales/sale-form';
 
 export default function SalePage() {
   const { id } = useParams<{ id: string }>();
@@ -58,15 +47,6 @@ export default function SalePage() {
     onSuccess: () => {
       toast.success(t.common.statusChanged);
       refresh();
-    },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
-
-  const opsStatus = useMutation({
-    mutationFn: ({ endpoint, rowId, s }: { endpoint: string; rowId: string; s: Status }) => api.patch(`${endpoint}/${rowId}/status`, { status: s }),
-    onSuccess: (_d, v) => {
-      toast.success(t.common.statusChanged);
-      invalidate(v.endpoint);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -96,19 +76,6 @@ export default function SalePage() {
   const s = sale.data;
   const BackIcon = dir === 'rtl' ? ArrowRight : ArrowLeft;
   const paidShare = s.customerTotal > 0 ? Math.min(100, Math.round((s.paid / s.customerTotal) * 100)) : 0;
-  const linked: Array<{ type: EntityType; endpoint: string; id: string; ref: string; status: Status; title: string; sub: string; date: string | null }> = [
-    ...s.hotelBookings.map((h) => ({ type: 'HOTEL' as const, endpoint: '/hotel-bookings', id: h.id, ref: h.ref, status: h.status, title: h.hotel?.name ?? t.entity.HOTEL, sub: [h.rooms, h.mealPlan].filter(Boolean).join(' · '), date: h.checkIn })),
-    ...s.transfers.map((x) => ({ type: 'TRANSFER' as const, endpoint: '/transfers', id: x.id, ref: x.ref, status: x.status, title: [x.fromPlace, x.toPlace].filter(Boolean).join(' → ') || t.entity.TRANSFER, sub: [x.time, x.flightNo, x.driverName].filter(Boolean).join(' · '), date: x.date })),
-    ...s.excursions.map((x) => ({ type: 'EXCURSION' as const, endpoint: '/excursions', id: x.id, ref: x.ref, status: x.status, title: x.activity, sub: x.hotelName ?? '', date: x.date })),
-    ...s.visas.map((v) => ({ type: 'VISA' as const, endpoint: '/visas', id: v.id, ref: v.ref, status: v.status, title: `${t.entity.VISA} · ${v.pax}`, sub: [v.fromPlace, v.toPlace].filter(Boolean).join(' → '), date: v.travelDate })),
-  ];
-
-  const pricing = [
-    { icon: BedDouble, label: t.sales.lineHotel, details: s.hotelName, cost: s.hotelCost, sell: s.hotelSell, commission: null, profit: s.hotelProfit },
-    { icon: Plane, label: t.sales.lineFlight, details: s.flightDetails, cost: s.flightCost, sell: s.flightSell, commission: s.flightCommission, profit: s.flightProfit },
-    { icon: CarFront, label: t.sales.lineTransfer, details: s.transferDetails, cost: s.transferCost, sell: s.transferSell, commission: null, profit: s.transferProfit },
-    { icon: Sparkles, label: t.sales.lineService, details: s.serviceType, cost: s.serviceCost, sell: s.serviceSell, commission: null, profit: s.serviceProfit },
-  ].filter((l) => l.cost || l.sell || l.details);
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-5">
@@ -128,7 +95,7 @@ export default function SalePage() {
               </span>
             </div>
             <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight">{s.customerName}</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="bidi text-sm text-muted-foreground">
               {[s.destination, s.hotelName].filter(Boolean).join(' · ') || '—'}
               {s.startDate ? (
                 <>
@@ -201,11 +168,9 @@ export default function SalePage() {
                   [t.sales.phone, s.phone ? <a key="p" href={`tel:${s.phone}`} className="ltr text-primary hover:underline">{s.phone}</a> : '—'],
                   [t.common.nationality, s.nationality ?? '—'],
                   [t.sales.destination, s.destination ?? '—'],
-                  [t.sales.hotel, s.hotelName ?? '—'],
                   [t.sales.start, <DateText key="a" value={s.startDate} full />],
                   [t.sales.end, <DateText key="b" value={s.endDate} full />],
                   [t.common.pax, `${s.adults} ${t.sales.adults}${s.children ? ` + ${s.children} ${t.sales.children}` : ''}`],
-                  [t.hotels.rooms, [s.singleRooms && `${s.singleRooms} ${t.sales.single}`, s.doubleRooms && `${s.doubleRooms} ${t.sales.double}`, s.tripleRooms && `${s.tripleRooms} ${t.sales.triple}`].filter(Boolean).join(' · ') || '—'],
                   [t.sales.seller, s.seller?.name ?? '—'],
                 ].map(([label, value]) => (
                   <div key={label as string} className="min-w-0">
@@ -220,7 +185,7 @@ export default function SalePage() {
 
           <Card className="animate-rise [animation-delay:120ms]">
             <CardHeader>
-              <CardTitle>{t.sales.pricingSection}</CardTitle>
+              <CardTitle>{t.sales.itemsSection}</CardTitle>
               <span className="text-xs text-muted-foreground">{t.currencies[s.currency]}</span>
             </CardHeader>
             <div className="overflow-x-auto">
@@ -235,22 +200,32 @@ export default function SalePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y border-t">
-                  {pricing.map((l) => (
-                    <tr key={l.label}>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2 font-medium">
-                          <l.icon className="size-4 text-muted-foreground" />
-                          {l.label}
-                        </div>
-                        {l.details ? <div className="ms-6 truncate text-xs text-muted-foreground">{l.details}</div> : null}
-                      </td>
-                      <td className="px-3 py-2.5 text-end tabular">{formatNumber(l.cost, locale)}</td>
-                      <td className="px-3 py-2.5 text-end tabular">{formatNumber(l.sell, locale)}</td>
-                      <td className="px-3 py-2.5 text-end tabular text-muted-foreground">{l.commission ? formatNumber(l.commission, locale) : '—'}</td>
-                      <td className={cn('px-4 py-2.5 text-end tabular font-medium', l.profit < 0 ? 'text-danger' : 'text-success')}>{formatNumber(l.profit, locale)}</td>
-                    </tr>
-                  ))}
-                  {!pricing.length ? (
+                  {s.lines.map((l) => {
+                    const Icon = LINE_ICON[l.kind];
+                    const rooms = l.kind === 'HOTEL' ? roomsText(l.singleRooms, l.doubleRooms, l.tripleRooms) : '';
+                    return (
+                      <tr key={l.id}>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2 font-medium">
+                            <Icon className="size-4 shrink-0 text-muted-foreground" />
+                            <span className="bidi truncate">{l.title || lineLabel(t, l.kind)}</span>
+                          </div>
+                          <div className="ms-6 truncate text-xs text-muted-foreground">
+                            {l.title ? `${lineLabel(t, l.kind)} · ` : ''}
+                            <DateText value={l.startDate} />
+                            {l.endDate ? <> {t.common.arrow} <DateText value={l.endDate} /></> : null}
+                            {l.nights != null ? ` · ${t.common.night(l.nights)}` : ''}
+                            {rooms ? ` · ${rooms}` : ''}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-end tabular">{formatNumber(l.cost, locale)}</td>
+                        <td className="px-3 py-2.5 text-end tabular">{formatNumber(l.sell, locale)}</td>
+                        <td className="px-3 py-2.5 text-end tabular text-muted-foreground">{l.kind === 'FLIGHT' && l.commission ? formatNumber(l.commission, locale) : '—'}</td>
+                        <td className={cn('px-4 py-2.5 text-end tabular font-medium', l.profit < 0 ? 'text-danger' : 'text-success')}>{formatNumber(l.profit, locale)}</td>
+                      </tr>
+                    );
+                  })}
+                  {!s.lines.length ? (
                     <tr>
                       <td colSpan={5} className="px-4 py-6 text-center text-sm text-muted-foreground">—</td>
                     </tr>
@@ -284,54 +259,6 @@ export default function SalePage() {
 
         <div className="space-y-5">
           <PaymentsCard sale={s} canEdit={canEdit} onChanged={refresh} onRemove={setRemovePayment} />
-
-          <Card className="animate-rise [animation-delay:140ms]">
-            <CardHeader>
-              <div>
-                <CardTitle>{t.sales.requestsTitle}</CardTitle>
-                <p className="mt-0.5 text-xs text-muted-foreground">{t.sales.opsHint}</p>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {linked.length ? (
-                <ul className="space-y-2">
-                  {linked.map((l) => {
-                    const Icon = OPS.find((o) => o.type === l.type)!.icon;
-                    return (
-                      <li key={l.id} className="flex items-center gap-3 rounded-lg border bg-surface px-3 py-2.5">
-                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-sunken text-muted-foreground">
-                          <Icon className="size-4" />
-                        </span>
-                        <Link href={ENTITY_ROUTE[l.type](l.id)} className="min-w-0 flex-1 hover:underline">
-                          <span className="flex items-center gap-2">
-                            <RefTag value={l.ref} />
-                            <span className="bidi truncate text-sm font-medium">{l.title}</span>
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                            <DateText value={l.date} />
-                            {l.sub ? ` · ${l.sub}` : ''}
-                          </span>
-                        </Link>
-                        <StatusMenu status={l.status} type={l.type} onChange={(st) => opsStatus.mutate({ endpoint: l.endpoint, rowId: l.id, s: st })} />
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t.sales.requestsEmpty}</p>
-              )}
-              <div className="flex flex-wrap gap-2 border-t pt-3">
-                {OPS.map((o) => (
-                  <Button key={o.type} variant="outline" size="sm" asChild>
-                    <Link href={`${o.page}?from=${s.id}`}>
-                      <Plus />
-                      {t.entity[o.type]}
-                    </Link>
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
 

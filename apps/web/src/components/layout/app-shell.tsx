@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
 import { BrandLogo } from './brand-logo';
 import { GlobalSearch } from './global-search';
-import { NAV, isActive } from './nav';
+import { NAV, allowedFor, homeFor, isActive } from './nav';
 
 type OpenCounts = Record<'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'SALE', number>;
 
@@ -29,6 +29,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && !user) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [loading, user, router, pathname]);
+  const allowed = allowedFor(user?.role, pathname);
+  useEffect(() => {
+    if (user && !allowed) router.replace(homeFor(user.role));
+  }, [user, allowed, router]);
 
   const counts = useQuery({
     queryKey: ['/dashboard', 'open-counts'],
@@ -37,7 +41,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     refetchInterval: 60_000,
   });
 
-  if (loading || !user) {
+  // Nothing renders on a page the person may not use while they are sent home.
+  if (loading || !user || !allowed) {
     return (
       <div className="grid min-h-dvh place-items-center bg-background">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
@@ -96,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sidebar = (
     <>
       <div className="flex h-topbar shrink-0 items-center border-b border-white/10 px-5">
-        <Link href="/dashboard" aria-label={t.common.appName}>
+        <Link href={homeFor(user.role)} aria-label={t.common.appName}>
           <BrandLogo variant="light" className="h-7" priority />
         </Link>
       </div>
@@ -117,10 +122,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const newItems = [
     { href: '/sales/new', icon: ShoppingBag, label: t.dashboard.newSale, show: is('SALES') },
-    { href: '/hotels?new=1', icon: Hotel, label: t.dashboard.newHotel, show: true },
-    { href: '/transfers?new=1', icon: CarFront, label: t.dashboard.newTransfer, show: true },
-    { href: '/excursions?new=1', icon: TentTree, label: t.dashboard.newExcursion, show: true },
-    { href: '/visas?new=1', icon: FileBadge, label: t.dashboard.newVisa, show: true },
+    { href: '/hotels?new=1', icon: Hotel, label: t.dashboard.newHotel, show: is('OPERATIONS') },
+    { href: '/transfers?new=1', icon: CarFront, label: t.dashboard.newTransfer, show: is('OPERATIONS') },
+    { href: '/excursions?new=1', icon: TentTree, label: t.dashboard.newExcursion, show: is('OPERATIONS') },
+    { href: '/visas?new=1', icon: FileBadge, label: t.dashboard.newVisa, show: is('OPERATIONS') },
   ].filter((i) => i.show);
 
   return (

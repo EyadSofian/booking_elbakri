@@ -31,7 +31,6 @@ function fieldLabel(t: Dictionary, key: string): string {
     paidToHotel: t.hotels.paidToHotel,
     hotelPaidOn: t.hotels.hotelPaidOn,
     notes: t.common.notes,
-    sale: t.common.linkedSale,
     kind: t.transfers.kind,
     date: t.common.date,
     time: t.transfers.pickup,

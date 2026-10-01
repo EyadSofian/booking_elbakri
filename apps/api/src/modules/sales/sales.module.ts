@@ -3,13 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiTags, OmitType, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested,
+  ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested,
 } from 'class-validator';
 import type { Response } from 'express';
 import {
-  CURRENCIES, OPEN_STATUSES, PAYMENT_METHODS, STATUSES, computeSaleTotals, countNights, formatRef, roomsText,
-  type CurrencyCode, type ListResponse, type MoneyByCurrency, type SaleDetail, type SaleItem, type SalePaymentItem,
-  type SalePaymentMethod, type Status,
+  CURRENCIES, PAYMENT_METHODS, SALE_LINE_KINDS, STATUSES, computeSaleTotals, countNights, formatRef, pricingFromLines,
+  saleLineProfit, type CurrencyCode, type ListResponse, type MoneyByCurrency, type SaleDetail, type SaleItem,
+  type SaleLineItem, type SaleLineKind, type SalePaymentItem, type SalePaymentMethod, type Status,
 } from '@elbakri/shared';
 import { PrismaService } from '../../common/prisma.service';
 import { ActivityService } from '../../common/activity.service';
@@ -19,10 +19,6 @@ import { IsDateOnly, ListQueryDto, dateRange, toCounts } from '../../common/list
 import { clean, fromDbDate, num, num0, toDbDate, todayIn } from '../../common/values';
 import { sendWorkbook } from '../../common/excel';
 import { STATUS_LABEL, StatusDto } from '../ops/ops-common';
-import { HotelBookingsService } from '../ops/hotel-bookings.module';
-import { TransfersService } from '../ops/transfers.module';
-import { ExcursionsService } from '../ops/excursions.module';
-import { VisasService } from '../ops/visas.module';
 
 const money = () => [IsNumber({ maxDecimalPlaces: 2 }), Min(0), IsOptional()];
 function Money(): PropertyDecorator {
@@ -43,12 +39,32 @@ class PaymentDto {
   note?: string | null;
 }
 
-class RequestsDto {
-  @IsBoolean() @IsOptional()
-  hotel?: boolean;
+/** One thing sold: a hotel stay, a flight, a transfer or a service. */
+export class SaleLineDto {
+  @IsIn(SALE_LINE_KINDS)
+  kind!: SaleLineKind;
 
-  @IsBoolean() @IsOptional()
-  transfer?: boolean;
+  @IsString() @MaxLength(300) @IsOptional()
+  title?: string | null;
+
+  @IsDateOnly() @IsOptional()
+  startDate?: string | null;
+
+  @IsDateOnly() @IsOptional()
+  endDate?: string | null;
+
+  @IsInt() @Min(0) @Max(999) @IsOptional()
+  singleRooms?: number;
+
+  @IsInt() @Min(0) @Max(999) @IsOptional()
+  doubleRooms?: number;
+
+  @IsInt() @Min(0) @Max(999) @IsOptional()
+  tripleRooms?: number;
+
+  @Money() cost?: number;
+  @Money() sell?: number;
+  @Money() commission?: number;
 }
 
 export class SaleDto {
@@ -71,23 +87,11 @@ export class SaleDto {
   @IsString() @MaxLength(200) @IsOptional()
   destination?: string | null;
 
-  @IsString() @MaxLength(200) @IsOptional()
-  hotelName?: string | null;
-
   @IsInt() @Min(0) @Max(999) @IsOptional()
   adults?: number;
 
   @IsInt() @Min(0) @Max(999) @IsOptional()
   children?: number;
-
-  @IsInt() @Min(0) @Max(999) @IsOptional()
-  singleRooms?: number;
-
-  @IsInt() @Min(0) @Max(999) @IsOptional()
-  doubleRooms?: number;
-
-  @IsInt() @Min(0) @Max(999) @IsOptional()
-  tripleRooms?: number;
 
   @IsDateOnly() @IsOptional()
   startDate?: string | null;
@@ -98,27 +102,9 @@ export class SaleDto {
   @IsIn(CURRENCIES) @IsOptional()
   currency?: CurrencyCode;
 
-  @Money() hotelCost?: number;
-  @Money() hotelSell?: number;
-
-  @IsString() @MaxLength(300) @IsOptional()
-  flightDetails?: string | null;
-
-  @Money() flightCost?: number;
-  @Money() flightSell?: number;
-  @Money() flightCommission?: number;
-
-  @IsString() @MaxLength(300) @IsOptional()
-  transferDetails?: string | null;
-
-  @Money() transferCost?: number;
-  @Money() transferSell?: number;
-
-  @IsString() @MaxLength(200) @IsOptional()
-  serviceType?: string | null;
-
-  @Money() serviceCost?: number;
-  @Money() serviceSell?: number;
+  /** Everything sold on this sale, in order. Sent in full: it replaces the lines. */
+  @IsArray() @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => SaleLineDto) @IsOptional()
+  lines?: SaleLineDto[];
 
   @IsUUID() @IsOptional()
   sellerId?: string | null;
@@ -132,13 +118,9 @@ export class SaleDto {
   /** Money taken when the booking is made. */
   @ValidateNested() @Type(() => PaymentDto) @IsOptional()
   initialPayment?: PaymentDto;
-
-  /** Ask operations to book these services straight away. */
-  @ValidateNested() @Type(() => RequestsDto) @IsOptional()
-  requests?: RequestsDto;
 }
 
-export class UpdateSaleDto extends PartialType(OmitType(SaleDto, ['initialPayment', 'requests'] as const)) {}
+export class UpdateSaleDto extends PartialType(OmitType(SaleDto, ['initialPayment'] as const)) {}
 
 export class SalesListQuery extends ListQueryDto {
   @IsUUID() @IsOptional()
@@ -157,11 +139,13 @@ const include = {
   seller: { select: { id: true, name: true } },
   createdBy: { select: { id: true, name: true } },
   payments: { include: { createdBy: { select: { id: true, name: true } } }, orderBy: [{ paidOn: 'asc' as const }, { createdAt: 'asc' as const }] },
-  hotelBookings: { where: { deletedAt: null }, select: { status: true } },
-  transfers: { where: { deletedAt: null }, select: { status: true } },
-  excursions: { where: { deletedAt: null }, select: { status: true } },
-  visas: { where: { deletedAt: null }, select: { status: true } },
+  lines: { orderBy: { position: 'asc' as const } },
 };
+
+/** The lines as one text per kind, e.g. two hotels read "Rixos + Jaz". */
+function joinTitles(lines: SaleLineItem[], kind: SaleLineKind): string | null {
+  return lines.filter((l) => l.kind === kind && l.title).map((l) => l.title).join(' + ') || null;
+}
 
 const TRACKED = [
   'status', 'saleDate', 'customerName', 'nationality', 'phone', 'destination', 'hotelName', 'adults', 'children', 'singleRooms',
@@ -179,10 +163,6 @@ export class SalesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
-    private readonly hotels: HotelBookingsService,
-    private readonly transfers: TransfersService,
-    private readonly excursions: ExcursionsService,
-    private readonly visas: VisasService,
     config: ConfigService,
   ) {
     this.tz = config.get<string>('APP_TIMEZONE', 'Africa/Cairo');
@@ -222,21 +202,29 @@ export class SalesService {
     };
   }
 
-  toItem(row: Row): SaleItem {
-    const pricing = {
-      hotelCost: num0(row.hotelCost),
-      hotelSell: num0(row.hotelSell),
-      flightCost: num0(row.flightCost),
-      flightSell: num0(row.flightSell),
-      flightCommission: num0(row.flightCommission),
-      transferCost: num0(row.transferCost),
-      transferSell: num0(row.transferSell),
-      serviceCost: num0(row.serviceCost),
-      serviceSell: num0(row.serviceSell),
-      commissionRate: num0(row.commissionRate),
-      paid: row.payments.reduce((sum, p) => sum + Number(p.amount), 0),
+  private lineItem(l: Row['lines'][number]): SaleLineItem {
+    const money = { kind: l.kind, cost: num0(l.cost), sell: num0(l.sell), commission: num0(l.commission) };
+    const startDate = fromDbDate(l.startDate);
+    const endDate = fromDbDate(l.endDate);
+    return {
+      ...money,
+      id: l.id,
+      title: l.title,
+      startDate,
+      endDate,
+      nights: l.kind === 'HOTEL' ? countNights(startDate, endDate) : null,
+      singleRooms: l.singleRooms,
+      doubleRooms: l.doubleRooms,
+      tripleRooms: l.tripleRooms,
+      profit: saleLineProfit(money),
     };
-    const linked = [...row.hotelBookings, ...row.transfers, ...row.excursions, ...row.visas];
+  }
+
+  toItem(row: Row): SaleItem {
+    const lines = row.lines.map((l) => this.lineItem(l));
+    const hotels = lines.filter((l) => l.kind === 'HOTEL');
+    const paid = row.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const pricing = pricingFromLines(lines, num0(row.commissionRate), paid);
     const startDate = fromDbDate(row.startDate);
     const endDate = fromDbDate(row.endDate);
     const lastPayment = row.payments[row.payments.length - 1];
@@ -252,26 +240,26 @@ export class SalesService {
       nationality: row.nationality,
       phone: row.phone,
       destination: row.destination,
-      hotelName: row.hotelName,
+      hotelName: joinTitles(lines, 'HOTEL'),
       adults: row.adults,
       children: row.children,
-      singleRooms: row.singleRooms,
-      doubleRooms: row.doubleRooms,
-      tripleRooms: row.tripleRooms,
+      singleRooms: hotels.reduce((n, l) => n + l.singleRooms, 0),
+      doubleRooms: hotels.reduce((n, l) => n + l.doubleRooms, 0),
+      tripleRooms: hotels.reduce((n, l) => n + l.tripleRooms, 0),
       startDate,
       endDate,
       nights: countNights(startDate, endDate),
       currency: row.currency,
-      flightDetails: row.flightDetails,
-      transferDetails: row.transferDetails,
-      serviceType: row.serviceType,
+      flightDetails: joinTitles(lines, 'FLIGHT'),
+      transferDetails: joinTitles(lines, 'TRANSFER'),
+      serviceType: joinTitles(lines, 'SERVICE'),
       seller: row.seller,
       lastPaymentOn: lastPayment ? fromDbDate(lastPayment.paidOn) : null,
       notes: row.notes,
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      requests: { total: linked.length, open: linked.filter((l) => OPEN_STATUSES.includes(l.status)).length },
+      lines,
     };
   }
 
@@ -279,8 +267,10 @@ export class SalesService {
     const and: Record<string, unknown>[] = [{ deletedAt: null }, this.scope(user)];
     const term = q.q?.trim();
     if (term) {
-      const or: Record<string, unknown>[] = ['customerName', 'phone', 'nationality', 'destination', 'hotelName', 'notes', 'flightDetails', 'serviceType']
+      const or: Record<string, unknown>[] = ['customerName', 'phone', 'nationality', 'destination', 'notes']
         .map((f) => ({ [f]: { contains: term, mode: 'insensitive' } }));
+      // Hotel names, flights, transfers and services are on the lines.
+      or.push({ lines: { some: { title: { contains: term, mode: 'insensitive' } } } });
       const n = term.match(/^[A-Za-z]?-?(\d{1,9})$/);
       if (n) or.push({ number: Number(n[1]) });
       and.push({ OR: or });
@@ -330,26 +320,44 @@ export class SalesService {
 
   async get(id: string, user?: AuthUser): Promise<SaleDetail> {
     const row = await this.mustFind(id, user);
-    const [hotelBookings, transfers, excursions, visas] = await Promise.all([
-      this.hotels.list(Object.assign(new ListQueryDto(), { saleId: id, page: 1, pageSize: 100 })),
-      this.transfers.list(Object.assign(new ListQueryDto(), { saleId: id, page: 1, pageSize: 100 })),
-      this.excursions.list(Object.assign(new ListQueryDto(), { saleId: id, page: 1, pageSize: 100 })),
-      this.visas.list(Object.assign(new ListQueryDto(), { saleId: id, page: 1, pageSize: 100 })),
-    ]);
-    return {
-      ...this.toItem(row),
-      payments: row.payments.map((p) => this.paymentItem(p)),
-      hotelBookings: hotelBookings.data,
-      transfers: transfers.data,
-      excursions: excursions.data,
-      visas: visas.data,
-    };
+    return { ...this.toItem(row), payments: row.payments.map((p) => this.paymentItem(p)) };
   }
 
   private checkDates(start: string | null | undefined, end: string | null | undefined) {
     if (start && end && end < start) {
       throw new ValidationError('The trip cannot end before it starts.', 'END_BEFORE_START');
     }
+  }
+
+  private lineRows(lines: SaleLineDto[]) {
+    return lines.map((l, i) => {
+      this.checkDates(l.startDate, l.endDate);
+      const hotel = l.kind === 'HOTEL';
+      return {
+        position: i,
+        kind: l.kind,
+        title: clean(l.title) ?? null,
+        startDate: toDbDate(l.startDate) ?? null,
+        endDate: hotel ? toDbDate(l.endDate) ?? null : null,
+        singleRooms: hotel ? l.singleRooms ?? 0 : 0,
+        doubleRooms: hotel ? l.doubleRooms ?? 0 : 0,
+        tripleRooms: hotel ? l.tripleRooms ?? 0 : 0,
+        cost: l.cost ?? 0,
+        sell: l.sell ?? 0,
+        commission: l.kind === 'FLIGHT' ? l.commission ?? 0 : 0,
+      };
+    });
+  }
+
+  /** Trip dates left empty are taken from the lines: first day in, last day out. */
+  private tripDates(dto: UpdateSaleDto, current: { startDate: string | null; endDate: string | null }) {
+    const start = dto.startDate === undefined ? current.startDate : dto.startDate;
+    const end = dto.endDate === undefined ? current.endDate : dto.endDate;
+    const days = (dto.lines ?? []).flatMap((l) => [l.startDate, l.endDate]).filter((d): d is string => Boolean(d)).sort();
+    return {
+      startDate: start || days[0] || null,
+      endDate: end || days[days.length - 1] || null,
+    };
   }
 
   private data(dto: UpdateSaleDto) {
@@ -360,27 +368,9 @@ export class SalesService {
       nationality: clean(dto.nationality),
       phone: clean(dto.phone),
       destination: clean(dto.destination),
-      hotelName: clean(dto.hotelName),
       adults: dto.adults,
       children: dto.children,
-      singleRooms: dto.singleRooms,
-      doubleRooms: dto.doubleRooms,
-      tripleRooms: dto.tripleRooms,
-      startDate: toDbDate(dto.startDate),
-      endDate: toDbDate(dto.endDate),
       currency: dto.currency,
-      hotelCost: dto.hotelCost,
-      hotelSell: dto.hotelSell,
-      flightDetails: clean(dto.flightDetails),
-      flightCost: dto.flightCost,
-      flightSell: dto.flightSell,
-      flightCommission: dto.flightCommission,
-      transferDetails: clean(dto.transferDetails),
-      transferCost: dto.transferCost,
-      transferSell: dto.transferSell,
-      serviceType: clean(dto.serviceType),
-      serviceCost: dto.serviceCost,
-      serviceSell: dto.serviceSell,
       sellerId: dto.sellerId === undefined ? undefined : dto.sellerId || null,
       commissionRate: dto.commissionRate,
       notes: dto.notes === undefined ? undefined : dto.notes?.trim() || null,
@@ -388,92 +378,43 @@ export class SalesService {
   }
 
   async create(dto: SaleDto, user: AuthUser): Promise<SaleDetail> {
-    this.checkDates(dto.startDate, dto.endDate);
+    const trip = this.tripDates(dto, { startDate: null, endDate: null });
+    this.checkDates(trip.startDate, trip.endDate);
     const data = this.data(dto);
     const sale = await this.prisma.sale.create({
       data: {
         ...data,
+        startDate: toDbDate(trip.startDate),
+        endDate: toDbDate(trip.endDate),
         saleDate: data.saleDate ?? toDbDate(todayIn(this.tz))!,
         customerName: data.customerName!,
         // The person entering the sale is the seller unless someone else is named.
         sellerId: data.sellerId === undefined ? user.id : data.sellerId,
         createdById: user.id,
+        lines: { create: this.lineRows(dto.lines ?? []) },
       },
     });
     await this.activity.log({ type: 'SALE', id: sale.id, action: 'CREATED', userId: user.id });
 
     if (dto.initialPayment) await this.addPayment(sale.id, dto.initialPayment, user);
-    if (dto.requests?.hotel || dto.requests?.transfer) await this.createRequests(sale.id, dto.requests, user);
     return this.get(sale.id);
-  }
-
-  /**
-   * Hands the sale to operations: a hotel booking and/or a transfer in status
-   * NEW, carrying the customer's details and linked back to this sale.
-   */
-  async createRequests(id: string, requests: RequestsDto, user: AuthUser): Promise<SaleDetail> {
-    const sale = this.toItem(await this.mustFind(id, user));
-    const direct = await this.prisma.agency.findFirst({ where: { isDirect: true, isActive: true }, orderBy: { createdAt: 'asc' } });
-    const common = {
-      guestName: sale.customerName,
-      nationality: sale.nationality,
-      phone: sale.phone,
-      agencyId: direct?.id ?? null,
-      currency: sale.currency,
-      saleId: sale.id,
-      status: 'NEW' as const,
-    };
-
-    if (requests.hotel) {
-      let hotelId: string | null = null;
-      if (sale.hotelName) {
-        const hotel =
-          (await this.prisma.hotel.findFirst({ where: { name: { equals: sale.hotelName, mode: 'insensitive' } } })) ??
-          (await this.prisma.hotel.create({ data: { name: sale.hotelName } }));
-        hotelId = hotel.id;
-      }
-      await this.hotels.create(
-        {
-          ...common,
-          hotelId,
-          checkIn: sale.startDate,
-          checkOut: sale.endDate,
-          rooms: roomsText(sale.singleRooms, sale.doubleRooms, sale.tripleRooms) || null,
-          adults: sale.adults,
-          children: sale.children,
-          cost: sale.hotelCost || null,
-          sell: sale.hotelSell || null,
-          notes: sale.notes,
-        },
-        user,
-      );
-    }
-    if (requests.transfer) {
-      await this.transfers.create(
-        {
-          ...common,
-          kind: 'ARRIVAL',
-          toPlace: sale.hotelName,
-          date: sale.startDate,
-          adults: sale.adults,
-          children: sale.children,
-          cost: sale.transferCost || null,
-          sell: sale.transferSell || null,
-          notes: sale.transferDetails,
-        },
-        user,
-      );
-    }
-    return this.get(id, user);
   }
 
   async update(id: string, dto: UpdateSaleDto, user: AuthUser): Promise<SaleDetail> {
     const before = this.toItem(await this.mustFind(id, user));
-    this.checkDates(
-      dto.startDate === undefined ? before.startDate : dto.startDate,
-      dto.endDate === undefined ? before.endDate : dto.endDate,
-    );
-    await this.prisma.sale.update({ where: { id }, data: this.data(dto) });
+    const trip = this.tripDates(dto, before);
+    this.checkDates(trip.startDate, trip.endDate);
+    const data = { ...this.data(dto), startDate: toDbDate(trip.startDate), endDate: toDbDate(trip.endDate) };
+    if (dto.lines) {
+      const lines = this.lineRows(dto.lines);
+      await this.prisma.$transaction([
+        this.prisma.sale.update({ where: { id }, data }),
+        this.prisma.saleLine.deleteMany({ where: { saleId: id } }),
+        this.prisma.saleLine.createMany({ data: lines.map((l) => ({ ...l, saleId: id })) }),
+      ]);
+    } else {
+      await this.prisma.sale.update({ where: { id }, data });
+    }
     const after = this.toItem(await this.mustFind(id, user));
     const changes = this.activity.diff(snapshot(before), snapshot(after), TRACKED);
     if (changes) await this.activity.log({ type: 'SALE', id, action: 'UPDATED', userId: user.id, changes });
@@ -670,12 +611,6 @@ export class SalesController {
   @Patch(':id/status')
   status(@Param('id', ParseUUIDPipe) id: string, @Body() dto: StatusDto, @CurrentUser() user: AuthUser) {
     return this.service.setStatus(id, dto.status, user);
-  }
-
-  @Roles('SALES')
-  @Post(':id/requests')
-  requests(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RequestsDto, @CurrentUser() user: AuthUser) {
-    return this.service.createRequests(id, dto, user);
   }
 
   @Roles('SALES')

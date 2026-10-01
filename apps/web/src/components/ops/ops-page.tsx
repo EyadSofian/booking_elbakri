@@ -1,12 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowDownUp, ArrowDown, ArrowUp, Copy, ExternalLink, Pencil, Plus, Trash2, type LucideIcon } from 'lucide-react';
-import type { EntityType, OpsBase, SaleDetail, Status } from '@elbakri/shared';
+import { ArrowDownUp, ArrowDown, ArrowUp, Copy, Pencil, Plus, Trash2, type LucideIcon } from 'lucide-react';
+import type { EntityType, OpsBase, Status } from '@elbakri/shared';
 import type { Dictionary } from '@/i18n/dictionaries/en';
 import { ApiError, api } from '@/lib/api-client';
 import { useI18n, useSession } from '@/lib/providers';
@@ -68,7 +67,6 @@ export interface OpsConfig<T extends OpsBase> {
   toDraft: (row: T) => Draft;
   toPayload: (draft: Draft) => Record<string, unknown>;
   validate: (draft: Draft, t: Dictionary) => Record<string, string>;
-  fromSale: (sale: SaleDetail) => Draft;
   /**
    * One more tab after the statuses, e.g. hotel payments due. It lists by its
    * own params, whatever the date filter, and its count comes from `extraCounts`.
@@ -133,31 +131,21 @@ export function OpsPage<T extends OpsBase>({ config }: { config: OpsConfig<T> })
   const list = useList<T>(config.endpoint, listParams);
   const invalidate = useInvalidate();
 
-  // ---- the side panel: ?open=<id> shows a booking, ?new=1 opens an empty form, ?from=<saleId> prefills from a sale
+  // ---- the side panel: ?open=<id> shows a booking, ?new=1 opens an empty form
   const [sheet, setSheet] = React.useState<SheetState>({ mode: 'closed' });
   const openId = params.get('open');
   const wantsNew = params.get('new');
-  const fromSale = params.get('from');
 
   React.useEffect(() => {
     if (openId) setSheet((s) => (s.mode === 'edit' && s.id === openId ? s : { mode: 'view', id: openId }));
   }, [openId]);
 
   React.useEffect(() => {
-    if (wantsNew && !fromSale) {
+    if (wantsNew) {
       setSheet({ mode: 'new', draft: config.emptyDraft() });
       setParams({ new: null }, false);
     }
-  }, [wantsNew, fromSale, config, setParams]);
-
-  React.useEffect(() => {
-    if (!fromSale) return;
-    api
-      .get<SaleDetail>(`/sales/${fromSale}`)
-      .then((sale) => setSheet({ mode: 'new', draft: config.fromSale(sale) }))
-      .catch(() => setSheet({ mode: 'new', draft: config.emptyDraft() }))
-      .finally(() => setParams({ from: null, new: null }, false));
-  }, [fromSale, config, setParams]);
+  }, [wantsNew, config, setParams]);
 
   const closeSheet = () => {
     setSheet({ mode: 'closed' });
@@ -532,12 +520,6 @@ function OpsDetails<T extends OpsBase>({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StatusMenu status={row.status} type={config.type} onChange={onStatus} size="md" />
-          {row.sale ? (
-            <Link href={`/sales/${row.sale.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-              <ExternalLink className="size-3" />
-              {t.ops.fromSale(row.sale.ref)}
-            </Link>
-          ) : null}
         </div>
       </DialogHeader>
       <DialogBody className="space-y-6">

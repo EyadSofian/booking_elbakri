@@ -282,7 +282,11 @@ export class LookupsService {
         for (const g of await this.prisma.sale.groupBy({ by: ['destination'], where: { ...live, ...like('destination') }, _count: { _all: true } })) add(g.destination, g._count._all);
         break;
       case 'serviceType':
-        for (const g of await this.prisma.sale.groupBy({ by: ['serviceType'], where: { ...live, ...like('serviceType') }, _count: { _all: true } })) add(g.serviceType, g._count._all);
+        for (const g of await this.prisma.saleLine.groupBy({
+          by: ['title'],
+          where: { kind: 'SERVICE', sale: live, ...like('title') },
+          _count: { _all: true },
+        })) add(g.title, g._count._all);
         break;
       case 'city':
         for (const g of await this.prisma.hotel.groupBy({ by: ['city'], where: like('city'), _count: { _all: true } })) add(g.city, g._count._all);

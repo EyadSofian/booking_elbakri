@@ -259,25 +259,11 @@ export class ImportsService {
             nationality: rec.nationality,
             phone: rec.phone,
             destination: rec.destination,
-            hotelName: rec.hotelName,
             adults: rec.adults,
             children: rec.children,
-            singleRooms: rec.singleRooms,
-            doubleRooms: rec.doubleRooms,
-            tripleRooms: rec.tripleRooms,
             startDate: toDbDate(rec.startDate),
             endDate: toDbDate(rec.endDate),
-            hotelCost: rec.hotelCost,
-            hotelSell: rec.hotelSell,
-            flightCost: rec.flightCost,
-            flightSell: rec.flightSell,
-            flightCommission: rec.flightCommission,
-            transferDetails: rec.transferDetails,
-            transferCost: rec.transferCost,
-            transferSell: rec.transferSell,
-            serviceType: rec.serviceType,
-            serviceCost: rec.serviceCost,
-            serviceSell: rec.serviceSell,
+            lines: { create: salesSheetLines(rec) },
             sellerId: seller,
             notes: rec.seller && !seller ? `Seller in sheet: ${rec.seller}` : null,
             sourceKey,
@@ -371,6 +357,28 @@ export class ImportsService {
       }
     }
   }
+}
+
+/** A sales-sheet row has at most one of each; each part that has anything becomes a line. */
+function salesSheetLines(r: SalesRecord) {
+  const start = toDbDate(r.startDate) ?? null;
+  const lines = [];
+  if (r.hotelName || r.hotelCost || r.hotelSell) {
+    lines.push({
+      kind: 'HOTEL' as const, title: r.hotelName, startDate: start, endDate: toDbDate(r.endDate) ?? null,
+      singleRooms: r.singleRooms, doubleRooms: r.doubleRooms, tripleRooms: r.tripleRooms, cost: r.hotelCost, sell: r.hotelSell,
+    });
+  }
+  if (r.flightCost || r.flightSell || r.flightCommission) {
+    lines.push({ kind: 'FLIGHT' as const, startDate: start, cost: r.flightCost, sell: r.flightSell, commission: r.flightCommission });
+  }
+  if (r.transferDetails || r.transferCost || r.transferSell) {
+    lines.push({ kind: 'TRANSFER' as const, title: r.transferDetails, startDate: start, cost: r.transferCost, sell: r.transferSell });
+  }
+  if (r.serviceType || r.serviceCost || r.serviceSell) {
+    lines.push({ kind: 'SERVICE' as const, title: r.serviceType, startDate: start, cost: r.serviceCost, sell: r.serviceSell });
+  }
+  return lines.map((l, position) => ({ ...l, position }));
 }
 
 const STOP_WORDS = new Set(['hotel', 'resort', 'the', 'and', 'spa', 'beach', 'sharm', 'hurghada', 'cairo', 'pickalbatros', 'albatros', 'club']);

@@ -12,7 +12,7 @@ import { IsDateOnly, ListQueryDto, dateRange, skipTake, toCounts } from '../../c
 import { clean, fromDbDate, num, toDbDate, todayIn } from '../../common/values';
 import { sendWorkbook } from '../../common/excel';
 import {
-  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, defaultAgencyId, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
+  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
 } from './ops-common';
 
 export class HotelBookingDto extends OpsBaseDto {
@@ -73,7 +73,7 @@ const include = { ...baseInclude, hotel: { select: { id: true, name: true, city:
 
 const TRACKED = [
   'status', 'guestName', 'nationality', 'phone', 'agency', 'hotel', 'checkIn', 'checkOut', 'rooms', 'mealPlan',
-  'adults', 'children', 'bookingDate', 'confirmationNo', 'currency', 'cost', 'sell', 'paidToHotel', 'hotelPaidOn', 'notes', 'sale',
+  'adults', 'children', 'bookingDate', 'confirmationNo', 'currency', 'cost', 'sell', 'paidToHotel', 'hotelPaidOn', 'notes',
 ] as const;
 
 const SORTS = {
@@ -235,7 +235,6 @@ export class HotelBookingsService {
     this.checkDates(dto.checkIn, dto.checkOut);
     const data = this.data(dto);
     if (!data.hotelId) data.hotelId = (await this.hotelByName(dto.hotelName)) ?? data.hotelId;
-    data.agencyId = data.agencyId ?? (await defaultAgencyId(this.prisma, dto));
     const row = await this.prisma.hotelBooking.create({
       data: {
         ...data,
@@ -311,11 +310,12 @@ export class HotelBookingsService {
 }
 
 function snapshot(b: HotelBookingItem): Record<string, unknown> {
-  return { ...b, agency: b.agency?.name ?? null, hotel: b.hotel?.name ?? null, sale: b.sale?.ref ?? null };
+  return { ...b, agency: b.agency?.name ?? null, hotel: b.hotel?.name ?? null };
 }
 
 @ApiTags('hotel-bookings')
 @ApiBearerAuth()
+@Roles('OPERATIONS')
 @Controller({ path: 'hotel-bookings', version: '1' })
 export class HotelBookingsController {
   constructor(

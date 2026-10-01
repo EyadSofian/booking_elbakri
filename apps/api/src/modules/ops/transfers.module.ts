@@ -13,7 +13,7 @@ import { IsDateOnly, ListQueryDto, dateRange, skipTake, toCounts } from '../../c
 import { clean, cleanTime, fromDbDate, toDbDate, todayIn } from '../../common/values';
 import { sendWorkbook } from '../../common/excel';
 import {
-  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, defaultAgencyId, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
+  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
 } from './ops-common';
 
 export class TransferDto extends OpsBaseDto {
@@ -93,7 +93,7 @@ const include = baseInclude;
 
 const TRACKED = [
   'status', 'kind', 'guestName', 'nationality', 'phone', 'agency', 'date', 'time', 'fromPlace', 'toPlace', 'flightNo',
-  'adults', 'children', 'vehicle', 'driverName', 'driverPhone', 'currency', 'cost', 'sell', 'notes', 'sale',
+  'adults', 'children', 'vehicle', 'driverName', 'driverPhone', 'currency', 'cost', 'sell', 'notes',
 ] as const;
 
 const SORTS = {
@@ -199,7 +199,6 @@ export class TransfersService {
       throw new ValidationError('The return cannot be before the way there.', 'RETURN_BEFORE_OUTBOUND');
     }
     const data = this.data(rest);
-    data.agencyId = data.agencyId ?? (await defaultAgencyId(this.prisma, dto));
     const kind = data.kind ?? guessKind(data.fromPlace, data.toPlace);
     const outbound = { ...data, guestName: data.guestName!, kind, createdById: user.id };
 
@@ -294,11 +293,12 @@ export class TransfersService {
 }
 
 function snapshot(t: TransferItem): Record<string, unknown> {
-  return { ...t, agency: t.agency?.name ?? null, sale: t.sale?.ref ?? null };
+  return { ...t, agency: t.agency?.name ?? null };
 }
 
 @ApiTags('transfers')
 @ApiBearerAuth()
+@Roles('OPERATIONS')
 @Controller({ path: 'transfers', version: '1' })
 export class TransfersController {
   constructor(

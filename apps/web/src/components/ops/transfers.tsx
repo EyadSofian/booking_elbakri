@@ -11,7 +11,7 @@ import { DateText, Pax, Txt } from '@/components/shared/format';
 import { SuggestInput } from '@/components/shared/pickers';
 import type { FormProps, OpsConfig } from './ops-page';
 import { GuestFields, PriceFields, StatusAndNotes } from './form-parts';
-import { AgencyCell, GuestCell, Sub, baseEmpty, baseFromSale, basePayload, baseToDraft, int, priceItems, refColumn, requireFields, str, toStr } from './common';
+import { AgencyCell, GuestCell, Sub, baseEmpty, basePayload, baseToDraft, int, priceItems, refColumn, requireFields, str, toStr } from './common';
 
 const KIND_ICON: Record<TransferKind, typeof PlaneLanding> = { ARRIVAL: PlaneLanding, DEPARTURE: PlaneTakeoff, TRANSFER: Route };
 const AIRPORT = /air\s?port|airpor|مطار|\b(ssh|hrg|cai|rmf|hbe|lxr|asw)\b/i;
@@ -322,28 +322,6 @@ export const transfersConfig: OpsConfig<TransferItem> = {
     }
     return errors;
   },
-  fromSale: (s) =>
-    baseFromSale(s, {
-      kind: 'ARRIVAL',
-      adults: toStr(s.adults),
-      children: toStr(s.children || ''),
-      date: toStr(s.startDate),
-      time: '',
-      fromPlace: '',
-      toPlace: s.hotelName ?? '',
-      flightNo: '',
-      driverName: '',
-      driverPhone: '',
-      vehicle: '',
-      cost: s.transferCost ? toStr(s.transferCost) : '',
-      sell: s.transferSell ? toStr(s.transferSell) : '',
-      notes: s.transferDetails ?? '',
-      // A trip with an end date usually needs the ride back too.
-      roundTrip: s.endDate ? '1' : '',
-      returnDate: toStr(s.endDate),
-      returnTime: '',
-      returnFlightNo: '',
-    }),
   extraActions: (r, { t }) => [
     {
       label: t.ops.addReturn,

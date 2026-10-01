@@ -4,7 +4,6 @@ import { Prisma } from '@prisma/client';
 import { CURRENCIES, STATUSES, formatRef, type CurrencyCode, type EntityType, type OpsBase, type Status } from '@elbakri/shared';
 import { clean, num } from '../../common/values';
 import type { ListQueryDto } from '../../common/list';
-import type { PrismaService } from '../../common/prisma.service';
 
 /** Fields every operations booking takes. */
 export class OpsBaseDto {
@@ -36,9 +35,6 @@ export class OpsBaseDto {
 
   @IsString() @MaxLength(4000) @IsOptional()
   notes?: string | null;
-
-  @IsUUID() @IsOptional()
-  saleId?: string | null;
 }
 
 export class StatusDto {
@@ -59,13 +55,11 @@ export function baseData(dto: Partial<OpsBaseDto>) {
     cost: dto.cost,
     sell: dto.sell,
     notes: dto.notes === undefined ? undefined : dto.notes?.trim() || null,
-    saleId: dto.saleId === undefined ? undefined : dto.saleId || null,
   };
 }
 
 export const baseInclude = {
   agency: { select: { id: true, name: true } },
-  sale: { select: { id: true, number: true, customerName: true } },
   createdBy: { select: { id: true, name: true } },
 } as const;
 
@@ -83,7 +77,6 @@ interface BaseRow {
   createdAt: Date;
   updatedAt: Date;
   agency: { id: string; name: string } | null;
-  sale: { id: string; number: number; customerName: string } | null;
   createdBy: { id: string; name: string } | null;
 }
 
@@ -101,7 +94,6 @@ export function baseItem(type: EntityType, row: BaseRow): OpsBase {
     cost: num(row.cost),
     sell: num(row.sell),
     notes: row.notes,
-    sale: row.sale ? { id: row.sale.id, ref: formatRef('SALE', row.sale.number), customerName: row.sale.customerName } : null,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -129,12 +121,11 @@ export function searchWhere(
   return { OR: or };
 }
 
-/** Common filters: status, agency, linked sale, not deleted. */
+/** Common filters: agency, not deleted. */
 export function baseWhere(q: ListQueryDto): Record<string, unknown> {
   return {
     deletedAt: null,
     ...(q.agencyId ? { agencyId: q.agencyId } : {}),
-    ...(q.saleId ? { saleId: q.saleId } : {}),
   };
 }
 
@@ -150,19 +141,6 @@ export function orderBy(q: ListQueryDto, allowed: SortSpec, fallback: Record<str
 /** Nullable columns sort with blanks last in both directions. */
 export const nullableSort = (field: string) => (dir: 'asc' | 'desc') => ({ [field]: { sort: dir, nulls: 'last' } });
 export const plainSort = (field: string) => (dir: 'asc' | 'desc') => ({ [field]: dir });
-
-/**
- * A booking requested from a sale belongs to ELBAKRI's own customers unless
- * an agency was chosen.
- */
-export async function defaultAgencyId(
-  prisma: PrismaService,
-  dto: { agencyId?: string | null; saleId?: string | null },
-): Promise<string | undefined> {
-  if (dto.agencyId || !dto.saleId) return undefined;
-  const direct = await prisma.agency.findFirst({ where: { isDirect: true, isActive: true }, orderBy: { createdAt: 'asc' } });
-  return direct?.id;
-}
 
 export const STATUS_LABEL: Record<Status, string> = {
   NEW: 'New',

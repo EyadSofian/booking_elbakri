@@ -1,7 +1,7 @@
 'use client';
 
 import { Hotel } from 'lucide-react';
-import { countNights, hotelOwed, hotelPaymentDue, roomsText, type HotelBookingItem } from '@elbakri/shared';
+import { countNights, hotelOwed, hotelPaymentDue, type HotelBookingItem } from '@elbakri/shared';
 import { useI18n } from '@/lib/providers';
 import { todayIso } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { DateText, Money, Pax, Txt } from '@/components/shared/format';
 import { HotelPicker, SuggestInput } from '@/components/shared/pickers';
 import type { OpsConfig, FormProps } from './ops-page';
 import { GuestFields, MoneyInput, StatusAndNotes } from './form-parts';
-import { AgencyCell, GuestCell, Sub, baseEmpty, baseFromSale, basePayload, baseToDraft, int, num, refColumn, requireFields, str, toStr, today } from './common';
+import { AgencyCell, GuestCell, Sub, baseEmpty, basePayload, baseToDraft, int, num, refColumn, requireFields, str, toStr, today } from './common';
 import { CurrencySelect } from '@/components/shared/pickers';
 import { asCurrency } from './draft';
 
@@ -293,21 +293,4 @@ export const hotelsConfig: OpsConfig<HotelBookingItem> = {
     if (d.checkIn && d.checkOut && d.checkOut < d.checkIn) errors.checkOut = t.errors.CHECKOUT_BEFORE_CHECKIN;
     return errors;
   },
-  fromSale: (s) =>
-    baseFromSale(s, {
-      hotelId: '',
-      hotelName: s.hotelName ?? '',
-      checkIn: toStr(s.startDate),
-      checkOut: toStr(s.endDate),
-      rooms: roomsText(s.singleRooms, s.doubleRooms, s.tripleRooms),
-      mealPlan: '',
-      adults: toStr(s.adults),
-      children: toStr(s.children || ''),
-      bookingDate: today(),
-      confirmationNo: '',
-      cost: s.hotelCost ? toStr(s.hotelCost) : '',
-      sell: s.hotelSell ? toStr(s.hotelSell) : '',
-      paidToHotel: '',
-      hotelPaidOn: '',
-    }),
 };

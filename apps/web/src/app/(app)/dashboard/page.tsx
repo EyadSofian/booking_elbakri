@@ -70,6 +70,8 @@ export default function DashboardPage() {
         { label: t.dashboard.excursions, value: d.counts.excursions, icon: TentTree, href: `/excursions?when=${dayParam}` },
         { label: t.dashboard.openRequests, value: d.counts.openRequests, icon: AlarmClock, href: '#requests', accent: true },
         { label: t.dashboard.unassigned, value: d.counts.unassignedTransfers, icon: UserX, href: '/transfers?assigned=no' },
+        // Sales show here as a number only; the details stay on the Sales page.
+        { label: t.dashboard.newSales, value: d.openByType.SALE, icon: ShoppingBag, href: '/sales?status=NEW,IN_PROGRESS' },
       ]
     : [];
 
@@ -118,7 +120,7 @@ export default function DashboardPage() {
 
       {data.isError ? <ErrorState error={data.error} onRetry={() => data.refetch()} /> : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
         {d
           ? tiles.map((tile, i) => (
               <Link
@@ -137,7 +139,7 @@ export default function DashboardPage() {
                 <p className={cn('tabular mt-1.5 text-3xl font-semibold', tile.value === 0 && 'text-muted-foreground/50')}>{tile.value}</p>
               </Link>
             ))
-          : Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-[88px] animate-pulse rounded-xl border bg-card" />)}
+          : Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-[88px] animate-pulse rounded-xl border bg-card" />)}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -222,36 +224,6 @@ export default function DashboardPage() {
             )}
           </section>
 
-          {d?.month ? (
-            <section className="rounded-xl border bg-card p-4 shadow-xs animate-rise [animation-delay:220ms]">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">{t.dashboard.month}</h2>
-                <Link href="/sales?when=this-month" className="text-xs text-primary hover:underline">
-                  {t.dashboard.monthSales(d.month.sales)}
-                </Link>
-              </div>
-              {d.month.sales ? (
-                <div className="grid grid-cols-3 gap-3">
-                  {(
-                    [
-                      [t.dashboard.monthSell, d.month.sell, ''],
-                      [t.dashboard.monthProfit, d.month.profit, 'text-success'],
-                      [t.dashboard.monthRemaining, d.month.remaining, 'text-sun-foreground dark:text-sun'],
-                    ] as const
-                  ).map(([label, rows, cls]) => (
-                    <div key={label}>
-                      <p className="text-xs text-muted-foreground">{label}</p>
-                      {rows.map((m) => (
-                        <Money key={m.currency} value={m.amount} currency={m.currency} className={cn('block text-base font-semibold', cls)} />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t.reports.noSales}</p>
-              )}
-            </section>
-          ) : null}
         </div>
       </div>
 

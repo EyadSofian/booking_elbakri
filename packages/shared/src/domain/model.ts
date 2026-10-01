@@ -28,6 +28,10 @@ export type CurrencyCode = (typeof CURRENCIES)[number];
 export const TRANSFER_KINDS = ['ARRIVAL', 'DEPARTURE', 'TRANSFER'] as const;
 export type TransferKind = (typeof TRANSFER_KINDS)[number];
 
+/** What a sale line can be; a sale holds any number of each. */
+export const SALE_LINE_KINDS = ['HOTEL', 'FLIGHT', 'TRANSFER', 'SERVICE'] as const;
+export type SaleLineKind = (typeof SALE_LINE_KINDS)[number];
+
 export const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'CARD', 'INSTAPAY', 'OTHER'] as const;
 export type SalePaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -137,7 +141,40 @@ export function computeSaleTotals(p: Partial<SalePricing>): SaleTotals {
   };
 }
 
-/** Builds the rooms line operations use ("1 SGL + 2 DBL") from the sale's counts. */
+/** One thing sold on a sale, as entered: the money parts of a line. */
+export interface SaleLineMoney {
+  kind: SaleLineKind;
+  cost: number;
+  sell: number;
+  /** Flights only: paid out on the ticket, counted as a cost. */
+  commission: number;
+}
+
+/** A line's profit: sell − cost − commission (the commission only applies to flights). */
+export function saleLineProfit(l: SaleLineMoney): number {
+  return round2(l.sell - l.cost - (l.kind === 'FLIGHT' ? l.commission : 0));
+}
+
+/** Adds the lines up per kind into the sheet's columns, ready for computeSaleTotals. */
+export function pricingFromLines(lines: SaleLineMoney[], commissionRate: number, paid: number): SalePricing {
+  const sum = (kind: SaleLineKind, pick: (l: SaleLineMoney) => number) =>
+    round2(lines.filter((l) => l.kind === kind).reduce((total, l) => total + (Number.isFinite(pick(l)) ? pick(l) : 0), 0));
+  return {
+    hotelCost: sum('HOTEL', (l) => l.cost),
+    hotelSell: sum('HOTEL', (l) => l.sell),
+    flightCost: sum('FLIGHT', (l) => l.cost),
+    flightSell: sum('FLIGHT', (l) => l.sell),
+    flightCommission: sum('FLIGHT', (l) => l.commission),
+    transferCost: sum('TRANSFER', (l) => l.cost),
+    transferSell: sum('TRANSFER', (l) => l.sell),
+    serviceCost: sum('SERVICE', (l) => l.cost),
+    serviceSell: sum('SERVICE', (l) => l.sell),
+    commissionRate,
+    paid,
+  };
+}
+
+/** Builds the rooms line ("1 SGL + 2 DBL") from room counts. */
 export function roomsText(single: number, double: number, triple: number): string {
   const parts: string[] = [];
   if (single > 0) parts.push(`${single} SGL`);
@@ -200,7 +237,6 @@ export interface OpsBase {
   cost: number | null;
   sell: number | null;
   notes: string | null;
-  sale: { id: string; ref: string; customerName: string } | null;
   createdBy: NamedRef | null;
   createdAt: string;
   updatedAt: string;
@@ -274,6 +310,26 @@ export interface SalePaymentItem {
   createdAt: string;
 }
 
+export interface SaleLineItem extends SaleLineMoney {
+  id: string;
+  /** The hotel name, flight details, transfer route or service type. */
+  title: string | null;
+  /** Check-in for a hotel; the day of a flight, transfer or service. */
+  startDate: string | null;
+  /** Check-out for a hotel. */
+  endDate: string | null;
+  nights: number | null;
+  singleRooms: number;
+  doubleRooms: number;
+  tripleRooms: number;
+  profit: number;
+}
+
+/**
+ * A sale. The per-kind money (hotelCost…), the room counts and the hotel,
+ * flight, transfer and service texts are its lines added up, so lists and the
+ * Excel export still read one row per sale.
+ */
 export interface SaleItem extends SalePricing, SaleTotals {
   id: string;
   number: number;
@@ -304,16 +360,11 @@ export interface SaleItem extends SalePricing, SaleTotals {
   createdBy: NamedRef | null;
   createdAt: string;
   updatedAt: string;
-  /** How many operations requests this sale has, by status. */
-  requests: { total: number; open: number };
+  lines: SaleLineItem[];
 }
 
 export interface SaleDetail extends SaleItem {
   payments: SalePaymentItem[];
-  hotelBookings: HotelBookingItem[];
-  transfers: TransferItem[];
-  excursions: ExcursionItem[];
-  visas: VisaItem[];
 }
 
 export interface ActivityItem {
@@ -377,11 +428,4 @@ export interface DashboardData {
     tomorrow: number;
     items: HotelBookingItem[];
   };
-  month: {
-    label: string;
-    sales: number;
-    sell: MoneyByCurrency[];
-    profit: MoneyByCurrency[];
-    remaining: MoneyByCurrency[];
-  } | null;
 }

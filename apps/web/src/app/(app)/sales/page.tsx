@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, ShoppingBag } from 'lucide-react';
-import type { CurrencyCode, ListResponse, SaleItem, Status } from '@elbakri/shared';
+import { SALE_LINE_KINDS, type CurrencyCode, type ListResponse, type SaleItem, type Status } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
 import { useI18n, useSession } from '@/lib/providers';
 import { useInvalidate } from '@/lib/queries';
@@ -21,6 +21,7 @@ import { StatusMenu } from '@/components/shared/status';
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/shared/feedback';
 import { ExportButton, Pagination, SearchBox } from '@/components/shared/list-controls';
 import { SellerSelect } from '@/components/shared/pickers';
+import { LINE_ICON, lineLabel } from '@/components/sales/sale-form';
 
 interface Totals {
   currency: CurrencyCode;
@@ -218,7 +219,7 @@ function SalesList() {
                   <tr>
                     {[
                       t.common.reference, t.sales.saleDate, t.sales.customerName, t.sales.destination, t.sales.datesSection,
-                      t.sales.totalSell, t.sales.totalProfit, t.sales.remaining, t.sales.seller, t.sales.requestsTitle, t.common.status,
+                      t.sales.totalSell, t.sales.totalProfit, t.sales.remaining, t.sales.seller, t.sales.items, t.common.status,
                     ].map((h, i, all) => (
                       <th
                         key={h}
@@ -286,13 +287,7 @@ function SalesList() {
                       </td>
                       <td className="border-b px-3 py-2.5 align-top"><span className="whitespace-nowrap">{s.seller?.name ?? '—'}</span></td>
                       <td className="border-b px-3 py-2.5 align-top">
-                        {s.requests.total ? (
-                          <Badge variant={s.requests.open ? 'sun' : 'outline'}>
-                            {s.requests.open ? t.sales.requestOpen(s.requests.open) : `${s.requests.total} ✓`}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground/60">—</span>
-                        )}
+                        <LineKinds sale={s} />
                       </td>
                       <td className="sticky end-0 border-b border-s bg-card px-3 py-2.5 align-top transition-colors group-hover:bg-surface-muted group-focus-visible:bg-surface-muted">
                         <StatusMenu status={s.status} onChange={(st) => changeStatus.mutate({ id: s.id, s: st })} disabled={!canEdit} />
@@ -306,6 +301,27 @@ function SalesList() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** What the sale holds, e.g. 🛏 2 · ✈ 1 — hover for the names. */
+function LineKinds({ sale }: { sale: SaleItem }) {
+  const { t } = useI18n();
+  const kinds = SALE_LINE_KINDS.map((kind) => ({ kind, lines: sale.lines.filter((l) => l.kind === kind) })).filter((k) => k.lines.length);
+  if (!kinds.length) return <span className="text-muted-foreground/60">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {kinds.map(({ kind, lines }) => {
+        const Icon = LINE_ICON[kind];
+        const names = lines.map((l) => l.title).filter(Boolean).join('، ');
+        return (
+          <Badge key={kind} variant="outline" className="gap-1" title={`${lineLabel(t, kind)}${names ? `: ${names}` : ''}`}>
+            <Icon className="size-3" />
+            <span className="tabular">{lines.length}</span>
+          </Badge>
+        );
+      })}
     </div>
   );
 }

@@ -29,8 +29,8 @@ function SettingsInner() {
 
   const tabs: Array<{ key: Tab; label: string; icon: typeof Users; show: boolean }> = [
     { key: 'team', label: t.settings.users, icon: Users, show: is() },
-    { key: 'agencies', label: t.settings.agencies, icon: Building2, show: true },
-    { key: 'hotels', label: t.settings.hotels, icon: Hotel, show: true },
+    { key: 'agencies', label: t.settings.agencies, icon: Building2, show: is('OPERATIONS') },
+    { key: 'hotels', label: t.settings.hotels, icon: Hotel, show: is('OPERATIONS') },
     { key: 'import', label: t.settings.import, icon: FileSpreadsheet, show: is('OPERATIONS') },
     { key: 'account', label: t.settings.account, icon: UserRound, show: true },
   ];

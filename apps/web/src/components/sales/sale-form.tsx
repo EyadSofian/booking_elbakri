@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, ArrowRight, BedDouble, CarFront, Plane, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BedDouble, CarFront, Plane, Plus, Sparkles, X } from 'lucide-react';
 import {
-  PAYMENT_METHODS, computeSaleTotals, countNights, type CurrencyCode, type SaleDetail, type SalePaymentMethod,
+  PAYMENT_METHODS, computeSaleTotals, countNights, pricingFromLines, saleLineProfit, type CurrencyCode, type SaleDetail,
+  type SaleLineKind, type SalePaymentMethod,
 } from '@elbakri/shared';
+import type { Dictionary } from '@/i18n/dictionaries/en';
 import { ApiError, api } from '@/lib/api-client';
 import { useI18n, useSession } from '@/lib/providers';
 import { useHotels, useInvalidate } from '@/lib/queries';
@@ -22,14 +24,50 @@ import { ConfirmDialog } from '@/components/shared/feedback';
 import { MoneyInput } from '@/components/ops/form-parts';
 import { asCurrency, asStatus, int, num, str, toStr, useDraft, type Draft } from '@/components/ops/draft';
 
+export const LINE_ICON: Record<SaleLineKind, typeof BedDouble> = { HOTEL: BedDouble, FLIGHT: Plane, TRANSFER: CarFront, SERVICE: Sparkles };
+
+export function lineLabel(t: Dictionary, kind: SaleLineKind): string {
+  return { HOTEL: t.sales.lineHotel, FLIGHT: t.sales.lineFlight, TRANSFER: t.sales.lineTransfer, SERVICE: t.sales.lineService }[kind];
+}
+
+/** One item on the form; every input is a string, like the rest of the draft. */
+interface LineDraft {
+  key: string;
+  kind: SaleLineKind;
+  title: string;
+  startDate: string;
+  endDate: string;
+  singleRooms: string;
+  doubleRooms: string;
+  tripleRooms: string;
+  cost: string;
+  sell: string;
+  commission: string;
+}
+
+let nextKey = 0;
+const newKey = () => `l${(nextKey += 1)}`;
+
+function newLine(kind: SaleLineKind, start: string, end: string): LineDraft {
+  return {
+    key: newKey(), kind, title: '', startDate: start, endDate: kind === 'HOTEL' ? end : '',
+    singleRooms: '0', doubleRooms: kind === 'HOTEL' ? '1' : '0', tripleRooms: '0', cost: '', sell: '', commission: '',
+  };
+}
+
+// The lines live in the draft as JSON so "unsaved changes" and reset cover them too.
+const readLines = (d: Draft): LineDraft[] => JSON.parse(d.lines || '[]') as LineDraft[];
+const writeLines = (lines: LineDraft[]) => JSON.stringify(lines);
+
+const lineMoney = (l: LineDraft) => ({ kind: l.kind, cost: num(l.cost) ?? 0, sell: num(l.sell) ?? 0, commission: num(l.commission) ?? 0 });
+
 function emptySale(sellerId: string): Draft {
   return {
-    status: 'NEW', saleDate: todayIso(), customerName: '', nationality: '', phone: '', destination: '', hotelName: '',
-    adults: '2', children: '0', singleRooms: '0', doubleRooms: '1', tripleRooms: '0', startDate: '', endDate: '',
-    currency: 'EGP', hotelCost: '', hotelSell: '', flightDetails: '', flightCost: '', flightSell: '', flightCommission: '',
-    transferDetails: '', transferCost: '', transferSell: '', serviceType: '', serviceCost: '', serviceSell: '',
+    status: 'NEW', saleDate: todayIso(), customerName: '', nationality: '', phone: '', destination: '',
+    adults: '2', children: '0', startDate: '', endDate: '', currency: 'EGP',
+    lines: writeLines([newLine('HOTEL', '', '')]),
     sellerId, commissionRate: '10', notes: '',
-    payAmount: '', payDate: todayIso(), payMethod: 'CASH', reqHotel: 'yes', reqTransfer: '',
+    payAmount: '', payDate: todayIso(), payMethod: 'CASH',
   };
 }
 
@@ -37,14 +75,17 @@ function saleToDraft(s: SaleDetail): Draft {
   const n = (v: number) => (v ? String(v) : '');
   return {
     status: s.status, saleDate: s.saleDate, customerName: s.customerName, nationality: toStr(s.nationality), phone: toStr(s.phone),
-    destination: toStr(s.destination), hotelName: toStr(s.hotelName), adults: String(s.adults), children: String(s.children),
-    singleRooms: String(s.singleRooms), doubleRooms: String(s.doubleRooms), tripleRooms: String(s.tripleRooms),
+    destination: toStr(s.destination), adults: String(s.adults), children: String(s.children),
     startDate: toStr(s.startDate), endDate: toStr(s.endDate), currency: s.currency,
-    hotelCost: n(s.hotelCost), hotelSell: n(s.hotelSell), flightDetails: toStr(s.flightDetails), flightCost: n(s.flightCost),
-    flightSell: n(s.flightSell), flightCommission: n(s.flightCommission), transferDetails: toStr(s.transferDetails),
-    transferCost: n(s.transferCost), transferSell: n(s.transferSell), serviceType: toStr(s.serviceType),
-    serviceCost: n(s.serviceCost), serviceSell: n(s.serviceSell), sellerId: s.seller?.id ?? '', commissionRate: String(s.commissionRate),
-    notes: toStr(s.notes), payAmount: '', payDate: todayIso(), payMethod: 'CASH', reqHotel: '', reqTransfer: '',
+    lines: writeLines(
+      s.lines.map((l) => ({
+        key: newKey(), kind: l.kind, title: toStr(l.title), startDate: toStr(l.startDate), endDate: toStr(l.endDate),
+        singleRooms: String(l.singleRooms), doubleRooms: String(l.doubleRooms), tripleRooms: String(l.tripleRooms),
+        cost: n(l.cost), sell: n(l.sell), commission: n(l.commission),
+      })),
+    ),
+    sellerId: s.seller?.id ?? '', commissionRate: String(s.commissionRate),
+    notes: toStr(s.notes), payAmount: '', payDate: todayIso(), payMethod: 'CASH',
   };
 }
 
@@ -56,27 +97,23 @@ function payload(d: Draft, isNew: boolean): Record<string, unknown> {
     nationality: str(d.nationality),
     phone: str(d.phone),
     destination: str(d.destination),
-    hotelName: str(d.hotelName),
     adults: int(d.adults) ?? 0,
     children: int(d.children) ?? 0,
-    singleRooms: int(d.singleRooms) ?? 0,
-    doubleRooms: int(d.doubleRooms) ?? 0,
-    tripleRooms: int(d.tripleRooms) ?? 0,
     startDate: d.startDate || null,
     endDate: d.endDate || null,
     currency: d.currency,
-    hotelCost: num(d.hotelCost) ?? 0,
-    hotelSell: num(d.hotelSell) ?? 0,
-    flightDetails: str(d.flightDetails),
-    flightCost: num(d.flightCost) ?? 0,
-    flightSell: num(d.flightSell) ?? 0,
-    flightCommission: num(d.flightCommission) ?? 0,
-    transferDetails: str(d.transferDetails),
-    transferCost: num(d.transferCost) ?? 0,
-    transferSell: num(d.transferSell) ?? 0,
-    serviceType: str(d.serviceType),
-    serviceCost: num(d.serviceCost) ?? 0,
-    serviceSell: num(d.serviceSell) ?? 0,
+    lines: readLines(d).map((l) => ({
+      kind: l.kind,
+      title: str(l.title),
+      startDate: l.startDate || null,
+      endDate: l.kind === 'HOTEL' ? l.endDate || null : null,
+      singleRooms: int(l.singleRooms) ?? 0,
+      doubleRooms: int(l.doubleRooms) ?? 0,
+      tripleRooms: int(l.tripleRooms) ?? 0,
+      cost: num(l.cost) ?? 0,
+      sell: num(l.sell) ?? 0,
+      commission: num(l.commission) ?? 0,
+    })),
     sellerId: d.sellerId || null,
     commissionRate: num(d.commissionRate) ?? 10,
     notes: str(d.notes),
@@ -84,7 +121,6 @@ function payload(d: Draft, isNew: boolean): Record<string, unknown> {
   if (isNew) {
     const amount = num(d.payAmount);
     if (amount && amount > 0) body.initialPayment = { amount, paidOn: d.payDate || todayIso(), method: d.payMethod || null };
-    if (d.reqHotel || d.reqTransfer) body.requests = { hotel: Boolean(d.reqHotel), transfer: Boolean(d.reqTransfer) };
   }
   return body;
 }
@@ -116,6 +152,100 @@ function Count({ id, value, onChange, label }: { id: string; value: string; onCh
   );
 }
 
+/** One item: what it is, when, the rooms for a hotel, and its money. */
+function LineEditor({
+  line,
+  index,
+  error,
+  onChange,
+  onRemove,
+}: {
+  line: LineDraft;
+  index: number;
+  error?: string;
+  onChange: (key: keyof LineDraft, value: string) => void;
+  onRemove: () => void;
+}) {
+  const { t, locale } = useI18n();
+  const Icon = LINE_ICON[line.kind];
+  const id = (field: string) => `s-l${index}-${field}`;
+  const hotel = line.kind === 'HOTEL';
+  const nights = hotel ? countNights(line.startDate || null, line.endDate || null) : null;
+  const profit = saleLineProfit(lineMoney(line));
+  const titleLabel = { HOTEL: t.sales.hotel, FLIGHT: t.sales.flightDetails, TRANSFER: t.sales.transferDetails, SERVICE: t.sales.serviceType }[line.kind];
+
+  return (
+    <li className="space-y-3 rounded-lg border bg-surface p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-muted-foreground">
+            <Icon className="size-4" />
+          </span>
+          {lineLabel(t, line.kind)}
+        </span>
+        <Button variant="ghost" size="icon-sm" onClick={onRemove} aria-label={`${t.sales.removeLine} ${lineLabel(t, line.kind)}`}>
+          <X />
+        </Button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+        <Field label={titleLabel} htmlFor={id('title')} className="sm:col-span-2">
+          {hotel ? (
+            <Input id={id('title')} list="s-hotels" value={line.title} onChange={(e) => onChange('title', e.target.value)} />
+          ) : line.kind === 'SERVICE' ? (
+            <SuggestInput id={id('title')} field="serviceType" value={line.title} onChange={(v) => onChange('title', v)} />
+          ) : (
+            <Input id={id('title')} value={line.title} onChange={(e) => onChange('title', e.target.value)} />
+          )}
+        </Field>
+        <Field label={hotel ? t.sales.checkIn : t.sales.lineDate} htmlFor={id('startDate')}>
+          <Input id={id('startDate')} type="date" value={line.startDate} onChange={(e) => onChange('startDate', e.target.value)} />
+        </Field>
+        {hotel ? (
+          <Field label={t.sales.checkOut} htmlFor={id('endDate')} error={error} hint={nights !== null ? t.common.night(nights) : undefined}>
+            <Input
+              id={id('endDate')}
+              type="date"
+              min={line.startDate || undefined}
+              value={line.endDate}
+              onChange={(e) => onChange('endDate', e.target.value)}
+              invalid={Boolean(error)}
+            />
+          </Field>
+        ) : null}
+      </div>
+
+      {hotel ? (
+        <div className="grid grid-cols-3 gap-3 sm:max-w-md">
+          <Count id={id('single')} label={t.sales.single} value={line.singleRooms} onChange={(v) => onChange('singleRooms', v)} />
+          <Count id={id('double')} label={t.sales.double} value={line.doubleRooms} onChange={(v) => onChange('doubleRooms', v)} />
+          <Count id={id('triple')} label={t.sales.triple} value={line.tripleRooms} onChange={(v) => onChange('tripleRooms', v)} />
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 items-end gap-3 md:grid-cols-4">
+        <Field label={t.common.cost} htmlFor={id('cost')}>
+          <MoneyInput id={id('cost')} value={line.cost} onChange={(v) => onChange('cost', v)} />
+        </Field>
+        <Field label={t.common.sell} htmlFor={id('sell')}>
+          <MoneyInput id={id('sell')} value={line.sell} onChange={(v) => onChange('sell', v)} />
+        </Field>
+        {line.kind === 'FLIGHT' ? (
+          <Field label={t.sales.commission} htmlFor={id('commission')}>
+            <MoneyInput id={id('commission')} value={line.commission} onChange={(v) => onChange('commission', v)} />
+          </Field>
+        ) : (
+          <div className="hidden md:block" />
+        )}
+        <div className="flex h-9 items-center justify-between gap-2 rounded-md bg-surface-sunken px-2.5 text-sm">
+          <span className="text-xs text-muted-foreground">{t.common.profit}</span>
+          <span className={cn('tabular font-medium', profit < 0 && 'text-danger', profit > 0 && 'text-success')}>{formatNumber(profit, locale)}</span>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export function SaleForm({ sale }: { sale?: SaleDetail }) {
   const { t, locale, dir, errorMessage } = useI18n();
   const { user } = useSession();
@@ -127,15 +257,20 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
   const [leave, setLeave] = React.useState<string | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
 
+  const lines = readLines(d);
+  const setLines = (next: LineDraft[]) => set('lines', writeLines(next));
+  const changeLine = (i: number, key: keyof LineDraft, value: string) =>
+    setLines(lines.map((l, j) => (j === i ? { ...l, [key]: value } : l)));
+  const addLine = (kind: SaleLineKind) => setLines([...lines, newLine(kind, d.startDate, d.endDate)]);
+  const lineErrors = React.useMemo(
+    () => Object.fromEntries(lines.map((l, i) => [i, l.kind === 'HOTEL' && l.startDate && l.endDate && l.endDate < l.startDate ? t.errors.CHECKOUT_BEFORE_CHECKIN : ''])),
+    [lines, t],
+  );
+
   const currency = asCurrency(d.currency) as CurrencyCode;
-  const totals = computeSaleTotals({
-    hotelCost: num(d.hotelCost) ?? 0, hotelSell: num(d.hotelSell) ?? 0,
-    flightCost: num(d.flightCost) ?? 0, flightSell: num(d.flightSell) ?? 0, flightCommission: num(d.flightCommission) ?? 0,
-    transferCost: num(d.transferCost) ?? 0, transferSell: num(d.transferSell) ?? 0,
-    serviceCost: num(d.serviceCost) ?? 0, serviceSell: num(d.serviceSell) ?? 0,
-    commissionRate: num(d.commissionRate) ?? 10,
-    paid: sale ? sale.paid : num(d.payAmount) ?? 0,
-  });
+  const totals = computeSaleTotals(
+    pricingFromLines(lines.map(lineMoney), num(d.commissionRate) ?? 10, sale ? sale.paid : num(d.payAmount) ?? 0),
+  );
   const nights = countNights(d.startDate || null, d.endDate || null);
   const money = (v: number) => `${formatNumber(v, locale)} ${t.currencies[currency]}`;
 
@@ -144,8 +279,6 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
     onSuccess: (saved) => {
       form.reset(saleToDraft(saved));
       invalidate('/sales');
-      invalidate('/hotel-bookings');
-      invalidate('/transfers');
       toast.success(sale ? t.common.saved : `${t.common.created} · ${saved.ref}`);
       router.push(`/sales/${saved.id}`);
     },
@@ -160,9 +293,11 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
     const errs: Record<string, string> = {};
     if (!d.customerName.trim()) errs.customerName = t.common.required;
     if (d.startDate && d.endDate && d.endDate < d.startDate) errs.endDate = t.errors.END_BEFORE_START;
-    if (Object.keys(errs).length) {
+    const badLine = Object.keys(lineErrors).find((i) => lineErrors[Number(i)]);
+    if (Object.keys(errs).length || badLine !== undefined) {
       form.setErrors(errs);
-      formRef.current?.querySelector<HTMLElement>(`#s-${Object.keys(errs)[0]}`)?.focus();
+      const target = Object.keys(errs)[0] ? `#s-${Object.keys(errs)[0]}` : `#s-l${badLine}-endDate`;
+      formRef.current?.querySelector<HTMLElement>(target)?.focus();
       return;
     }
     save.mutate(payload(d, !sale));
@@ -170,44 +305,21 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
 
   const back = sale ? `/sales/${sale.id}` : '/sales';
   const BackIcon = dir === 'rtl' ? ArrowRight : ArrowLeft;
-
-  const line = (
-    key: 'hotel' | 'flight' | 'transfer' | 'service',
-    icon: React.ReactNode,
-    label: string,
-    details: React.ReactNode,
-    profit: number,
-    withCommission = false,
-  ) => (
-    <div className="grid grid-cols-2 items-end gap-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))_minmax(0,0.9fr)]">
-      <div className="col-span-2 flex min-w-0 flex-col gap-1.5 md:col-span-1">
-        <span className="flex items-center gap-1.5 text-[0.8rem] font-semibold">
-          {icon}
-          {label}
-        </span>
-        {details}
-      </div>
-      <Field label={t.common.cost} htmlFor={`s-${key}Cost`}>
-        <MoneyInput id={`s-${key}Cost`} value={d[`${key}Cost`]} onChange={(v) => set(`${key}Cost`, v)} />
-      </Field>
-      <Field label={t.common.sell} htmlFor={`s-${key}Sell`}>
-        <MoneyInput id={`s-${key}Sell`} value={d[`${key}Sell`]} onChange={(v) => set(`${key}Sell`, v)} />
-      </Field>
-      {withCommission ? (
-        <Field label={t.sales.commission} htmlFor="s-flightCommission">
-          <MoneyInput id="s-flightCommission" value={d.flightCommission} onChange={(v) => set('flightCommission', v)} />
-        </Field>
-      ) : (
-        <div className="hidden md:block" />
-      )}
-      <div className="flex h-9 items-center justify-end rounded-md bg-surface-sunken px-2.5 text-sm">
-        <span className={cn('tabular font-medium', profit < 0 && 'text-danger', profit > 0 && 'text-success')}>{formatNumber(profit, locale)}</span>
-      </div>
-    </div>
-  );
+  const addButtons: Array<[SaleLineKind, string]> = [
+    ['HOTEL', t.sales.addHotel],
+    ['FLIGHT', t.sales.addFlight],
+    ['TRANSFER', t.sales.addTransfer],
+    ['SERVICE', t.sales.addService],
+  ];
 
   return (
     <form ref={formRef} onSubmit={submit} noValidate autoComplete="off" className="mx-auto max-w-[1200px]">
+      <datalist id="s-hotels">
+        {(hotels.data ?? []).map((h) => (
+          <option key={h.id} value={h.name} />
+        ))}
+      </datalist>
+
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 animate-rise">
         <div className="flex items-center gap-3">
           <Button
@@ -239,29 +351,16 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
                 <Field label={t.common.nationality} htmlFor="s-nationality">
                   <SuggestInput id="s-nationality" field="nationality" value={d.nationality} onChange={(v) => set('nationality', v)} />
                 </Field>
-                <Field label={t.sales.destination} htmlFor="s-destination" hint={t.sales.destinationHint}>
+                <Field label={t.sales.destination} htmlFor="s-destination" hint={t.sales.destinationHint} className="sm:col-span-2">
                   <SuggestInput id="s-destination" field="destination" value={d.destination} onChange={(v) => set('destination', v)} />
-                </Field>
-                <Field label={t.sales.hotel} htmlFor="s-hotelName">
-                  <>
-                    <Input id="s-hotelName" list="s-hotels" value={d.hotelName} onChange={(e) => set('hotelName', e.target.value)} />
-                    <datalist id="s-hotels">
-                      {(hotels.data ?? []).map((h) => (
-                        <option key={h.id} value={h.name} />
-                      ))}
-                    </datalist>
-                  </>
                 </Field>
               </div>
             </FormSection>
 
             <FormSection title={t.sales.paxSection}>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
                 <Count id="s-adults" label={t.sales.adults} value={d.adults} onChange={(v) => set('adults', v)} />
                 <Count id="s-children" label={t.sales.children} value={d.children} onChange={(v) => set('children', v)} />
-                <Count id="s-singleRooms" label={t.sales.single} value={d.singleRooms} onChange={(v) => set('singleRooms', v)} />
-                <Count id="s-doubleRooms" label={t.sales.double} value={d.doubleRooms} onChange={(v) => set('doubleRooms', v)} />
-                <Count id="s-tripleRooms" label={t.sales.triple} value={d.tripleRooms} onChange={(v) => set('tripleRooms', v)} />
               </div>
             </FormSection>
 
@@ -287,32 +386,44 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
 
           <section className="rounded-xl border bg-card p-5 shadow-xs animate-rise [animation-delay:80ms]">
             <FormSection
-              title={t.sales.pricingSection}
-              hint={t.sales.pricingHint}
+              title={t.sales.itemsSection}
+              hint={t.sales.itemsHint}
               aside={
                 <div className="w-44">
                   <CurrencySelect id="s-currency" value={currency} onChange={(v) => set('currency', v)} />
                 </div>
               }
             >
-              <div className="hidden grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))_minmax(0,0.9fr)] gap-2 border-b pb-2 text-end text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
-                <span className="text-start">{t.sales.service}</span>
-                <span />
-                <span />
-                <span />
-                <span>{t.common.profit}</span>
+              {lines.length ? (
+                <ul className="space-y-3">
+                  {lines.map((line, i) => (
+                    <LineEditor
+                      key={line.key}
+                      line={line}
+                      index={i}
+                      error={lineErrors[i] || undefined}
+                      onChange={(key, value) => changeLine(i, key, value)}
+                      onRemove={() => setLines(lines.filter((_, j) => j !== i))}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t.sales.itemsEmpty}</p>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {addButtons.map(([kind, label]) => {
+                  const Icon = LINE_ICON[kind];
+                  return (
+                    <Button key={kind} variant="outline" size="sm" onClick={() => addLine(kind)}>
+                      <Plus />
+                      <Icon className="text-muted-foreground" />
+                      {label}
+                    </Button>
+                  );
+                })}
               </div>
-              {line('hotel', <BedDouble className="size-4 text-muted-foreground" />, t.sales.lineHotel,
-                <span className="truncate text-xs text-muted-foreground">{d.hotelName || '—'}</span>, totals.hotelProfit)}
-              {line('flight', <Plane className="size-4 text-muted-foreground" />, t.sales.lineFlight,
-                <Input aria-label={t.sales.flightDetails} placeholder={t.sales.flightDetails} value={d.flightDetails} onChange={(e) => set('flightDetails', e.target.value)} />,
-                totals.flightProfit, true)}
-              {line('transfer', <CarFront className="size-4 text-muted-foreground" />, t.sales.lineTransfer,
-                <Input aria-label={t.sales.transferDetails} placeholder={t.sales.transferDetails} value={d.transferDetails} onChange={(e) => set('transferDetails', e.target.value)} />,
-                totals.transferProfit)}
-              {line('service', <Sparkles className="size-4 text-muted-foreground" />, t.sales.lineService,
-                <SuggestInput field="serviceType" aria-label={t.sales.serviceType} placeholder={t.sales.serviceType} value={d.serviceType} onChange={(v) => set('serviceType', v)} />,
-                totals.serviceProfit)}
+
               <dl className="grid grid-cols-3 gap-2 rounded-lg bg-surface-sunken px-3 py-2.5 text-sm">
                 {(
                   [
@@ -360,31 +471,6 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
                       ))}
                     </NativeSelect>
                   </Field>
-                </div>
-              </FormSection>
-            ) : null}
-
-            {!sale ? (
-              <FormSection title={t.sales.opsSection} hint={t.sales.opsHint}>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      ['reqHotel', t.sales.requestHotel, BedDouble],
-                      ['reqTransfer', t.sales.requestTransfer, CarFront],
-                    ] as const
-                  ).map(([key, label, Icon]) => (
-                    <label
-                      key={key}
-                      className={cn(
-                        'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
-                        d[key] ? 'border-primary bg-accent font-medium text-accent-foreground' : 'bg-surface hover:bg-accent/50',
-                      )}
-                    >
-                      <input type="checkbox" className="size-4 accent-[hsl(var(--primary))]" checked={Boolean(d[key])} onChange={(e) => set(key, e.target.checked ? 'yes' : '')} />
-                      <Icon className="size-4 text-muted-foreground" />
-                      {label}
-                    </label>
-                  ))}
                 </div>
               </FormSection>
             ) : null}

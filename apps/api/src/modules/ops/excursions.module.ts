@@ -12,7 +12,7 @@ import { IsDateOnly, ListQueryDto, dateRange, skipTake, toCounts } from '../../c
 import { clean, cleanTime, fromDbDate, toDbDate, todayIn } from '../../common/values';
 import { sendWorkbook } from '../../common/excel';
 import {
-  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, defaultAgencyId, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
+  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
 } from './ops-common';
 
 export class ExcursionDto extends OpsBaseDto {
@@ -41,7 +41,7 @@ const include = baseInclude;
 
 const TRACKED = [
   'status', 'guestName', 'nationality', 'phone', 'agency', 'activity', 'hotelName', 'date', 'time',
-  'adults', 'children', 'currency', 'cost', 'sell', 'notes', 'sale',
+  'adults', 'children', 'currency', 'cost', 'sell', 'notes',
 ] as const;
 
 const SORTS = {
@@ -131,7 +131,6 @@ export class ExcursionsService {
 
   async create(dto: ExcursionDto, user: AuthUser): Promise<ExcursionItem> {
     const data = this.data(dto);
-    data.agencyId = data.agencyId ?? (await defaultAgencyId(this.prisma, dto));
     const row = await this.prisma.excursion.create({
       data: { ...data, guestName: data.guestName!, activity: data.activity!, createdById: user.id },
       include,
@@ -191,11 +190,12 @@ export class ExcursionsService {
 }
 
 function snapshot(x: ExcursionItem): Record<string, unknown> {
-  return { ...x, agency: x.agency?.name ?? null, sale: x.sale?.ref ?? null };
+  return { ...x, agency: x.agency?.name ?? null };
 }
 
 @ApiTags('excursions')
 @ApiBearerAuth()
+@Roles('OPERATIONS')
 @Controller({ path: 'excursions', version: '1' })
 export class ExcursionsController {
   constructor(

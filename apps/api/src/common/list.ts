@@ -66,10 +66,6 @@ export class ListQueryDto {
   agencyId?: string;
 
   @ApiPropertyOptional()
-  @IsUUID() @IsOptional()
-  saleId?: string;
-
-  @ApiPropertyOptional()
   @IsString() @MaxLength(40) @IsOptional()
   sortBy?: string;
 

@@ -12,7 +12,7 @@ import { IsDateOnly, ListQueryDto, dateRange, skipTake, toCounts } from '../../c
 import { clean, fromDbDate, toDbDate, todayIn } from '../../common/values';
 import { sendWorkbook } from '../../common/excel';
 import {
-  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, defaultAgencyId, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
+  OpsBaseDto, STATUS_LABEL, StatusDto, baseData, baseInclude, baseItem, baseWhere, nullableSort, orderBy, plainSort, searchWhere,
 } from './ops-common';
 
 export class VisaDto extends OpsBaseDto {
@@ -38,7 +38,7 @@ const include = baseInclude;
 
 const TRACKED = [
   'status', 'guestName', 'nationality', 'phone', 'agency', 'pax', 'fromPlace', 'toPlace', 'travelDate', 'passportNo',
-  'currency', 'cost', 'sell', 'notes', 'sale',
+  'currency', 'cost', 'sell', 'notes',
 ] as const;
 
 const SORTS = {
@@ -124,7 +124,6 @@ export class VisasService {
 
   async create(dto: VisaDto, user: AuthUser): Promise<VisaItem> {
     const data = this.data(dto);
-    data.agencyId = data.agencyId ?? (await defaultAgencyId(this.prisma, dto));
     const row = await this.prisma.visa.create({
       data: { ...data, guestName: data.guestName!, createdById: user.id },
       include,
@@ -183,11 +182,12 @@ export class VisasService {
 }
 
 function snapshot(v: VisaItem): Record<string, unknown> {
-  return { ...v, agency: v.agency?.name ?? null, sale: v.sale?.ref ?? null };
+  return { ...v, agency: v.agency?.name ?? null };
 }
 
 @ApiTags('visas')
 @ApiBearerAuth()
+@Roles('OPERATIONS')
 @Controller({ path: 'visas', version: '1' })
 export class VisasController {
   constructor(

@@ -9,7 +9,7 @@ import { DateText, Pax, Txt } from '@/components/shared/format';
 import { SuggestInput } from '@/components/shared/pickers';
 import type { FormProps, OpsConfig } from './ops-page';
 import { GuestFields, PriceFields, StatusAndNotes } from './form-parts';
-import { AgencyCell, GuestCell, Sub, baseEmpty, baseFromSale, basePayload, baseToDraft, int, priceItems, refColumn, requireFields, str, toStr } from './common';
+import { AgencyCell, GuestCell, Sub, baseEmpty, basePayload, baseToDraft, int, priceItems, refColumn, requireFields, str, toStr } from './common';
 
 function ExcursionForm({ draft, set, errors }: FormProps<ExcursionItem>) {
   const { t } = useI18n();
@@ -131,15 +131,4 @@ export const excursionsConfig: OpsConfig<ExcursionItem> = {
     children: int(d.children),
   }),
   validate: (d, t) => requireFields(d, t, ['guestName', 'activity']),
-  fromSale: (s) =>
-    baseFromSale(s, {
-      activity: s.serviceType ?? '',
-      hotelName: s.hotelName ?? '',
-      date: toStr(s.startDate),
-      time: '',
-      adults: toStr(s.adults),
-      children: toStr(s.children || ''),
-      cost: s.serviceCost ? toStr(s.serviceCost) : '',
-      sell: s.serviceSell ? toStr(s.serviceSell) : '',
-    }),
 };

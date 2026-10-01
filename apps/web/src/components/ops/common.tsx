@@ -1,6 +1,6 @@
 'use client';
 
-import type { OpsBase, SaleDetail } from '@elbakri/shared';
+import type { OpsBase } from '@elbakri/shared';
 import type { Dictionary } from '@/i18n/dictionaries/en';
 import { todayIso } from '@/lib/utils';
 import { Money, RefTag, Txt } from '@/components/shared/format';
@@ -10,7 +10,7 @@ import { int, num, str, toStr, type Draft } from './draft';
 export function baseEmpty(extra: Draft = {}): Draft {
   return {
     status: 'NEW', guestName: '', phone: '', nationality: '', agencyId: '', agencyName: '',
-    currency: 'EGP', cost: '', sell: '', notes: '', saleId: '', ...extra,
+    currency: 'EGP', cost: '', sell: '', notes: '', ...extra,
   };
 }
 
@@ -26,7 +26,6 @@ export function baseToDraft(row: OpsBase): Draft {
     cost: toStr(row.cost),
     sell: toStr(row.sell),
     notes: toStr(row.notes),
-    saleId: row.sale?.id ?? '',
   };
 }
 
@@ -41,20 +40,7 @@ export function basePayload(d: Draft): Record<string, unknown> {
     cost: num(d.cost),
     sell: num(d.sell),
     notes: str(d.notes),
-    saleId: d.saleId || null,
   };
-}
-
-/** A request coming from a sale starts with the customer's details. */
-export function baseFromSale(sale: SaleDetail, extra: Draft = {}): Draft {
-  return baseEmpty({
-    guestName: sale.customerName,
-    phone: toStr(sale.phone),
-    nationality: toStr(sale.nationality),
-    currency: sale.currency,
-    saleId: sale.id,
-    ...extra,
-  });
 }
 
 export function requireFields(d: Draft, t: Dictionary, fields: string[]): Record<string, string> {
@@ -91,7 +77,6 @@ export function AgencyCell({ row, t }: { row: OpsBase; t: Dictionary }) {
       <div className="truncate">
         <Txt>{row.agency?.name ?? '—'}</Txt>
       </div>
-      {row.sale ? <Sub>{t.common.linkedSale} {row.sale.ref}</Sub> : null}
     </div>
   );
 }

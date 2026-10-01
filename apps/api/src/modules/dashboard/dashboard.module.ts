@@ -11,7 +11,7 @@ import { HotelBookingsService } from '../ops/hotel-bookings.module';
 import { TransfersService } from '../ops/transfers.module';
 import { ExcursionsService } from '../ops/excursions.module';
 import { VisasService } from '../ops/visas.module';
-import { SalesService, SalesListQuery, sumBy, totalsByCurrency } from '../sales/sales.module';
+import { SalesService, SalesListQuery, totalsByCurrency } from '../sales/sales.module';
 import { baseInclude } from '../ops/ops-common';
 
 class DashboardQuery {
@@ -114,22 +114,7 @@ export class DashboardService {
       items: due.slice(0, 30),
     };
 
-    let month: DashboardData['month'] = null;
-    if (user.role === 'ADMIN' || user.role === 'SALES') {
-      const monthSales = await this.sales.list(
-        Object.assign(new SalesListQuery(), { page: 1, pageSize: 100000, when: 'this-month', dateBy: 'sale' }),
-        user,
-      );
-      const items = monthSales.data.filter((s) => s.status !== 'CANCELLED');
-      month = {
-        label: today.slice(0, 7),
-        sales: items.length,
-        sell: sumBy(items, (s) => s.totalSell),
-        profit: sumBy(items, (s) => s.totalProfit),
-        remaining: sumBy(items, (s) => s.remaining),
-      };
-    }
-
+    // Sales show here only as a count (openByType.SALE); their details stay on the Sales page.
     return {
       date: today,
       day: target,
@@ -154,7 +139,6 @@ export class DashboardService {
       excursions: excursions.map((x) => this.excursions.toItem(x)),
       requests,
       payments,
-      month,
     };
   }
 
@@ -230,12 +214,15 @@ export class DashboardService {
   /** One box that finds any booking by name, phone, reference, hotel or flight. */
   async search(q: string, user: AuthUser) {
     const query = Object.assign(new ListQueryDto(), { q, page: 1, pageSize: 6 });
+    // Salespeople only work in Sales, so that is all their search looks in.
+    const ops = user.role !== 'SALES';
+    const none = { data: [] };
     const [sales, hotels, transfers, excursions, visas] = await Promise.all([
       this.sales.list(Object.assign(new SalesListQuery(), query), user),
-      this.hotels.list(query),
-      this.transfers.list(query),
-      this.excursions.list(query),
-      this.visas.list(query),
+      ops ? this.hotels.list(query) : none,
+      ops ? this.transfers.list(query) : none,
+      ops ? this.excursions.list(query) : none,
+      ops ? this.visas.list(query) : none,
     ]);
     type Hit = { type: EntityType; id: string; ref: string; title: string; subtitle: string | null; date: string | null; status: Status };
     const hits: Hit[] = [
@@ -255,6 +242,8 @@ export class DashboardService {
 export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
+  /** The operations home page; salespeople work from Sales only. */
+  @Roles('OPERATIONS')
   @Get('dashboard')
   dashboard(@Query() q: DashboardQuery, @CurrentUser() user: AuthUser) {
     return this.service.dashboard(q.day ?? 'today', user);
