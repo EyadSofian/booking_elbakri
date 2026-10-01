@@ -13,7 +13,7 @@ import {
 } from '@elbakri/shared';
 import { PrismaService } from '../../common/prisma.service';
 import { ActivityService } from '../../common/activity.service';
-import { NotFoundError, ValidationError } from '../../common/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors';
 import { CurrentUser, Roles, type AuthUser } from '../../common/auth';
 import { IsDateOnly, ListQueryDto, dateRange, toCounts } from '../../common/list';
 import { clean, fromDbDate, num, num0, toDbDate, todayIn } from '../../common/values';
@@ -181,6 +181,13 @@ export class SalesService {
     return this.scope(user);
   }
 
+  /** Whether this person may change the sale: admin always, a salesperson only on their own. */
+  private canEdit(row: { sellerId: string | null; createdById: string | null }, user?: AuthUser): boolean {
+    if (!user) return true;
+    if (user.role === 'ADMIN') return true;
+    return user.role === 'SALES' && (row.sellerId === user.id || row.createdById === user.id);
+  }
+
   findRow(id: string, user?: AuthUser) {
     return this.prisma.sale.findFirst({ where: { id, deletedAt: null, ...this.scope(user) }, include });
   }
@@ -220,7 +227,7 @@ export class SalesService {
     };
   }
 
-  toItem(row: Row): SaleItem {
+  toItem(row: Row, user?: AuthUser): SaleItem {
     const lines = row.lines.map((l) => this.lineItem(l));
     const hotels = lines.filter((l) => l.kind === 'HOTEL');
     const paid = row.payments.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -260,6 +267,7 @@ export class SalesService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       lines,
+      canEdit: this.canEdit(row, user),
     };
   }
 
@@ -297,7 +305,7 @@ export class SalesService {
       this.prisma.sale.findMany({ where: filtered, include, orderBy: sort as never }),
       this.prisma.sale.groupBy({ by: ['status'], where: where as never, _count: { _all: true } }),
     ]);
-    let items = rows.map((r) => this.toItem(r));
+    let items = rows.map((r) => this.toItem(r, user));
     if (q.balance === 'due') items = items.filter((s) => s.remaining > 0 && s.status !== 'CANCELLED');
     if (q.balance === 'paid') items = items.filter((s) => s.remaining <= 0);
 
@@ -312,15 +320,21 @@ export class SalesService {
     };
   }
 
-  private async mustFind(id: string, user?: AuthUser): Promise<Row> {
+  /**
+   * The sale, if this person may see it. With `forWrite` they must also be
+   * allowed to change it: a sales supervisor can read everyone's sales but only
+   * change their own.
+   */
+  private async mustFind(id: string, user?: AuthUser, forWrite = false): Promise<Row> {
     const row = await this.findRow(id, user);
     if (!row) throw new NotFoundError('Sale', id);
+    if (forWrite && !this.canEdit(row, user)) throw new ForbiddenError();
     return row;
   }
 
   async get(id: string, user?: AuthUser): Promise<SaleDetail> {
     const row = await this.mustFind(id, user);
-    return { ...this.toItem(row), payments: row.payments.map((p) => this.paymentItem(p)) };
+    return { ...this.toItem(row, user), payments: row.payments.map((p) => this.paymentItem(p)) };
   }
 
   private checkDates(start: string | null | undefined, end: string | null | undefined) {
@@ -397,11 +411,11 @@ export class SalesService {
     await this.activity.log({ type: 'SALE', id: sale.id, action: 'CREATED', userId: user.id });
 
     if (dto.initialPayment) await this.addPayment(sale.id, dto.initialPayment, user);
-    return this.get(sale.id);
+    return this.get(sale.id, user);
   }
 
   async update(id: string, dto: UpdateSaleDto, user: AuthUser): Promise<SaleDetail> {
-    const before = this.toItem(await this.mustFind(id, user));
+    const before = this.toItem(await this.mustFind(id, user, true), user);
     const trip = this.tripDates(dto, before);
     this.checkDates(trip.startDate, trip.endDate);
     const data = { ...this.data(dto), startDate: toDbDate(trip.startDate), endDate: toDbDate(trip.endDate) };
@@ -415,14 +429,14 @@ export class SalesService {
     } else {
       await this.prisma.sale.update({ where: { id }, data });
     }
-    const after = this.toItem(await this.mustFind(id, user));
+    const after = this.toItem(await this.mustFind(id, user), user);
     const changes = this.activity.diff(snapshot(before), snapshot(after), TRACKED);
     if (changes) await this.activity.log({ type: 'SALE', id, action: 'UPDATED', userId: user.id, changes });
     return this.get(id, user);
   }
 
   async setStatus(id: string, status: Status, user: AuthUser): Promise<SaleItem> {
-    const before = await this.mustFind(id, user);
+    const before = await this.mustFind(id, user, true);
     if (before.status !== status) {
       await this.prisma.sale.update({ where: { id }, data: { status } });
       await this.activity.log({
@@ -431,17 +445,17 @@ export class SalesService {
         changes: { status: { from: before.status, to: status } },
       });
     }
-    return this.toItem(await this.mustFind(id, user));
+    return this.toItem(await this.mustFind(id, user), user);
   }
 
   async remove(id: string, user: AuthUser): Promise<void> {
-    await this.mustFind(id, user);
+    await this.mustFind(id, user, true);
     await this.prisma.sale.update({ where: { id }, data: { deletedAt: new Date() } });
     await this.activity.log({ type: 'SALE', id, action: 'DELETED', userId: user.id });
   }
 
   async addPayment(id: string, dto: PaymentDto, user: AuthUser): Promise<SaleDetail> {
-    const sale = await this.mustFind(id, user);
+    const sale = await this.mustFind(id, user, true);
     await this.prisma.salePayment.create({
       data: {
         saleId: id,
@@ -460,7 +474,7 @@ export class SalesService {
   }
 
   async removePayment(id: string, paymentId: string, user: AuthUser): Promise<SaleDetail> {
-    const sale = await this.mustFind(id, user);
+    const sale = await this.mustFind(id, user, true);
     const payment = sale.payments.find((p) => p.id === paymentId);
     if (!payment) throw new NotFoundError('Payment', paymentId);
     await this.prisma.salePayment.delete({ where: { id: paymentId } });
@@ -567,6 +581,8 @@ function snapshot(s: SaleItem): Record<string, unknown> {
 
 @ApiTags('sales')
 @ApiBearerAuth()
+// Sales are for the sales team (and the admin). Operations have no access.
+@Roles('SALES')
 @Controller({ path: 'sales', version: '1' })
 export class SalesController {
   constructor(

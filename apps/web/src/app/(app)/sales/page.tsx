@@ -290,7 +290,7 @@ function SalesList() {
                         <LineKinds sale={s} />
                       </td>
                       <td className="sticky end-0 border-b border-s bg-card px-3 py-2.5 align-top transition-colors group-hover:bg-surface-muted group-focus-visible:bg-surface-muted">
-                        <StatusMenu status={s.status} onChange={(st) => changeStatus.mutate({ id: s.id, s: st })} disabled={!canEdit} />
+                        <StatusMenu status={s.status} onChange={(st) => changeStatus.mutate({ id: s.id, s: st })} disabled={!s.canEdit} />
                       </td>
                     </tr>
                   ))}

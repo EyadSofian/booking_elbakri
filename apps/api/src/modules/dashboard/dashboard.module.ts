@@ -67,7 +67,7 @@ export class DashboardService {
         this.prisma.transfer.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { date: { sort: 'asc', nulls: 'last' } }, take: 30 }),
         this.prisma.excursion.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { date: { sort: 'asc', nulls: 'last' } }, take: 30 }),
         this.prisma.visa.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { travelDate: { sort: 'asc', nulls: 'last' } }, take: 30 }),
-        this.prisma.sale.count({ where: { deletedAt: null, status: open, ...this.sales.scopeFor(user) } }),
+        user.role === 'OPERATIONS' ? 0 : this.prisma.sale.count({ where: { deletedAt: null, status: open, ...this.sales.scopeFor(user) } }),
         this.prisma.transfer.count({
           where: { deletedAt: null, driverName: null, status: { notIn: ['CANCELLED', 'DONE'] }, date: { gte: new Date(`${today}T00:00:00Z`) } },
         }),
@@ -150,7 +150,7 @@ export class DashboardService {
       this.prisma.transfer.count({ where }),
       this.prisma.excursion.count({ where }),
       this.prisma.visa.count({ where }),
-      this.prisma.sale.count({ where: { ...where, ...this.sales.scopeFor(user) } }),
+      user.role === 'OPERATIONS' ? 0 : this.prisma.sale.count({ where: { ...where, ...this.sales.scopeFor(user) } }),
     ]);
     return { HOTEL, TRANSFER, EXCURSION, VISA, SALE };
   }
@@ -214,11 +214,12 @@ export class DashboardService {
   /** One box that finds any booking by name, phone, reference, hotel or flight. */
   async search(q: string, user: AuthUser) {
     const query = Object.assign(new ListQueryDto(), { q, page: 1, pageSize: 6 });
-    // Salespeople only work in Sales, so that is all their search looks in.
+    // Salespeople only work in Sales and operations never see Sales, so each
+    // searches only their own side. The admin searches both.
     const ops = user.role !== 'SALES';
     const none = { data: [] };
     const [sales, hotels, transfers, excursions, visas] = await Promise.all([
-      this.sales.list(Object.assign(new SalesListQuery(), query), user),
+      user.role === 'OPERATIONS' ? none : this.sales.list(Object.assign(new SalesListQuery(), query), user),
       ops ? this.hotels.list(query) : none,
       ops ? this.transfers.list(query) : none,
       ops ? this.excursions.list(query) : none,

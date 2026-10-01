@@ -265,6 +265,7 @@ export const en = {
     paymentNote: 'Note',
     removePayment: 'Remove payment',
     removePaymentTitle: 'Remove this payment?',
+    viewOnly: 'View only — someone else’s sale',
     itemsSection: 'What was sold',
     itemsHint: 'Add each hotel, flight, transfer or service on its own — as many of each as the customer takes.',
     itemsEmpty: 'Nothing added yet. Add a hotel, flight, transfer or service.',

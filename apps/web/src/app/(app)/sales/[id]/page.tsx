@@ -8,10 +8,11 @@ import { toast } from 'sonner';
 import { ArrowLeft, ArrowRight, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { PAYMENT_METHODS, roomsText, type SaleDetail, type SalePaymentMethod, type Status } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
-import { useI18n, useSession } from '@/lib/providers';
+import { useI18n } from '@/lib/providers';
 import { useActivity, useInvalidate, useRecord } from '@/lib/queries';
 import { cn, formatNumber, todayIso } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input, NativeSelect } from '@/components/ui/input';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +28,6 @@ import { LINE_ICON, lineLabel } from '@/components/sales/sale-form';
 export default function SalePage() {
   const { id } = useParams<{ id: string }>();
   const { t, locale, dir, errorMessage } = useI18n();
-  const { is } = useSession();
   const router = useRouter();
   const qc = useQueryClient();
   const invalidate = useInvalidate();
@@ -35,7 +35,8 @@ export default function SalePage() {
   const history = useActivity('/sales', id);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [removePayment, setRemovePayment] = React.useState<string | null>(null);
-  const canEdit = is('SALES');
+  // A sales supervisor can read everyone's sales but only change their own.
+  const canEdit = Boolean(sale.data?.canEdit);
 
   const refresh = () => {
     invalidate('/sales');
@@ -108,6 +109,7 @@ export default function SalePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!canEdit ? <Badge variant="outline">{t.sales.viewOnly}</Badge> : null}
           <StatusMenu status={s.status} onChange={(st) => status.mutate(st)} disabled={!canEdit} size="md" />
           {canEdit ? (
             <>

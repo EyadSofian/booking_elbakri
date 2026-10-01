@@ -262,6 +262,7 @@ export const ar: Dictionary = {
     paymentNote: 'ملاحظة',
     removePayment: 'مسح الدفعة',
     removePaymentTitle: 'تمسح الدفعة دي؟',
+    viewOnly: 'للاطلاع بس — حجز بتاع سيلز تاني',
     itemsSection: 'اللي اتباع للعميل',
     itemsHint: 'ضيف كل فندق أو طيران أو انتقال أو خدمة لوحده — تقدر تضيف أكتر من واحد من كل نوع.',
     itemsEmpty: 'لسه مفيش حاجة. ضيف فندق أو طيران أو انتقال أو خدمة.',

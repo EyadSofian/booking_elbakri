@@ -21,14 +21,14 @@ export interface NavGroup {
 }
 
 /**
- * The whole app in eight places. Salespeople see Sales only; their account is
- * under the avatar menu.
+ * The whole app in eight places. Salespeople see Sales only; operations see
+ * everything except Sales. Their account is under the avatar menu.
  */
 export const NAV: NavGroup[] = [
   { key: 'home', items: [{ href: '/dashboard', icon: Home, label: (t) => t.nav.home, roles: ['OPERATIONS'] }] },
   {
     key: 'sales',
-    items: [{ href: '/sales', icon: ShoppingBag, label: (t) => t.nav.sales, badge: 'SALE' }],
+    items: [{ href: '/sales', icon: ShoppingBag, label: (t) => t.nav.sales, badge: 'SALE', roles: ['SALES'] }],
   },
   {
     key: 'operations',
@@ -54,10 +54,14 @@ export function homeFor(role: Role | undefined): string {
   return role === 'SALES' ? '/sales' : '/dashboard';
 }
 
-/** Salespeople stay in Sales (plus their own account page). */
+/**
+ * Salespeople stay in Sales (plus their own account page); operations never
+ * see Sales. The admin sees everything.
+ */
 export function allowedFor(role: Role | undefined, pathname: string): boolean {
-  if (role !== 'SALES') return true;
-  return isActive(pathname, '/sales') || isActive(pathname, '/settings');
+  if (role === 'SALES') return isActive(pathname, '/sales') || isActive(pathname, '/settings');
+  if (role === 'OPERATIONS') return !isActive(pathname, '/sales');
+  return true;
 }
 
 export function isActive(pathname: string, href: string): boolean {

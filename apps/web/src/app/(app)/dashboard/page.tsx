@@ -70,8 +70,8 @@ export default function DashboardPage() {
         { label: t.dashboard.excursions, value: d.counts.excursions, icon: TentTree, href: `/excursions?when=${dayParam}` },
         { label: t.dashboard.openRequests, value: d.counts.openRequests, icon: AlarmClock, href: '#requests', accent: true },
         { label: t.dashboard.unassigned, value: d.counts.unassignedTransfers, icon: UserX, href: '/transfers?assigned=no' },
-        // Sales show here as a number only; the details stay on the Sales page.
-        { label: t.dashboard.newSales, value: d.openByType.SALE, icon: ShoppingBag, href: '/sales?status=NEW,IN_PROGRESS' },
+        // For the admin only: sales show here as a number, the details stay on the Sales page.
+        ...(is('SALES') ? [{ label: t.dashboard.newSales, value: d.openByType.SALE, icon: ShoppingBag, href: '/sales?status=NEW,IN_PROGRESS' }] : []),
       ]
     : [];
 
@@ -120,7 +120,7 @@ export default function DashboardPage() {
 
       {data.isError ? <ErrorState error={data.error} onRetry={() => data.refetch()} /> : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4", is('SALES') ? "xl:grid-cols-7" : "xl:grid-cols-6")}>
         {d
           ? tiles.map((tile, i) => (
               <Link
@@ -139,7 +139,7 @@ export default function DashboardPage() {
                 <p className={cn('tabular mt-1.5 text-3xl font-semibold', tile.value === 0 && 'text-muted-foreground/50')}>{tile.value}</p>
               </Link>
             ))
-          : Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-[88px] animate-pulse rounded-xl border bg-card" />)}
+          : Array.from({ length: is('SALES') ? 7 : 6 }).map((_, i) => <div key={i} className="h-[88px] animate-pulse rounded-xl border bg-card" />)}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">

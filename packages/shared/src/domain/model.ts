@@ -361,6 +361,8 @@ export interface SaleItem extends SalePricing, SaleTotals {
   createdAt: string;
   updatedAt: string;
   lines: SaleLineItem[];
+  /** False for a sales supervisor looking at someone else's sale: they can read it, not change it. */
+  canEdit: boolean;
 }
 
 export interface SaleDetail extends SaleItem {
