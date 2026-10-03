@@ -18,6 +18,8 @@ import { HotelBookingsController, HotelBookingsService } from './modules/ops/hot
 import { TransfersController, TransfersService } from './modules/ops/transfers.module';
 import { ExcursionsController, ExcursionsService } from './modules/ops/excursions.module';
 import { VisasController, VisasService } from './modules/ops/visas.module';
+import { FlightsController, FlightsService } from './modules/ops/flights.module';
+import { AttachmentsController, AttachmentsService } from './modules/attachments/attachments.module';
 import { SalesController, SalesService } from './modules/sales/sales.module';
 import { DashboardController, DashboardService } from './modules/dashboard/dashboard.module';
 import { ImportsController, ImportsService } from './modules/imports/imports.module';
@@ -48,6 +50,8 @@ import { ImportsController, ImportsService } from './modules/imports/imports.mod
     TransfersController,
     ExcursionsController,
     VisasController,
+    FlightsController,
+    AttachmentsController,
     DashboardController,
     ImportsController,
   ],
@@ -61,6 +65,8 @@ import { ImportsController, ImportsService } from './modules/imports/imports.mod
     TransfersService,
     ExcursionsService,
     VisasService,
+    FlightsService,
+    AttachmentsService,
     DashboardService,
     ImportsService,
     { provide: APP_INTERCEPTOR, useClass: RequestIdInterceptor },

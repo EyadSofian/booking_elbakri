@@ -192,9 +192,9 @@ export class SalesService {
     return this.prisma.sale.findFirst({ where: { id, deletedAt: null, ...this.scope(user) }, include });
   }
 
-  /** Throws "not found" unless the user may see the sale. */
-  async assertVisible(id: string, user: AuthUser): Promise<void> {
-    await this.mustFind(id, user);
+  /** Throws unless the user may see the sale — and, with `forWrite`, change it. */
+  async assertVisible(id: string, user: AuthUser, forWrite = false): Promise<void> {
+    await this.mustFind(id, user, forWrite);
   }
 
   private paymentItem(p: Row['payments'][number]): SalePaymentItem {

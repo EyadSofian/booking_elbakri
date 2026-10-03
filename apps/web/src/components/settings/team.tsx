@@ -76,14 +76,15 @@ function UserDialog({ user, onClose }: { user: UserSummary | null; onClose: () =
   const [role, setRole] = React.useState<Role>(user?.role ?? 'OPERATIONS');
   const [active, setActive] = React.useState(user?.isActive ?? true);
   const [seesAllSales, setSeesAllSales] = React.useState(user?.seesAllSales ?? false);
+  const [visaAccess, setVisaAccess] = React.useState(user?.visaAccess ?? false);
   const [password, setPassword] = React.useState('');
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const save = useMutation({
     mutationFn: () =>
       user
-        ? api.patch(`/users/${user.id}`, { name, email, role, seesAllSales, isActive: active, password: password || undefined })
-        : api.post('/users', { name, email, role, seesAllSales, password }),
+        ? api.patch(`/users/${user.id}`, { name, email, role, seesAllSales, visaAccess, isActive: active, password: password || undefined })
+        : api.post('/users', { name, email, role, seesAllSales, visaAccess, password }),
     onSuccess: () => {
       toast.success(t.common.saved);
       void qc.invalidateQueries({ queryKey: ['/users'] });
@@ -152,6 +153,20 @@ function UserDialog({ user, onClose }: { user: UserSummary | null; onClose: () =
                 <span>
                   <span className="block font-medium">{t.settings.seesAllSales}</span>
                   <span className="block text-xs text-muted-foreground">{t.settings.seesAllSalesHint}</span>
+                </span>
+              </label>
+            ) : null}
+            {role === 'SALES' ? (
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={visaAccess}
+                  onChange={(e) => setVisaAccess(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[hsl(var(--primary))]"
+                />
+                <span>
+                  <span className="block font-medium">{t.settings.visaAccess}</span>
+                  <span className="block text-xs text-muted-foreground">{t.settings.visaAccessHint}</span>
                 </span>
               </label>
             ) : null}

@@ -56,6 +56,8 @@ model User {
   role         Role      @default(OPERATIONS)
   /// A sales supervisor sees every salesperson's sales; other salespeople see only their own.
   seesAllSales Boolean   @default(false)
+  /// Lets a salesperson work in Visas as well (operations and admins always can).
+  visaAccess   Boolean   @default(false)
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
@@ -69,6 +71,8 @@ model User {
   transfersCreated  Transfer[]
   excursionsCreated Excursion[]
   visasCreated      Visa[]
+  flightsCreated    Flight[]
+  attachments       Attachment[]
   activities        Activity[]
   imports           ImportBatch[]
 
@@ -110,6 +114,7 @@ model Agency {
   transfers     Transfer[]
   excursions    Excursion[]
   visas         Visa[]
+  flights       Flight[]
 
   @@map("agencies")
 }
@@ -352,6 +357,7 @@ model Visa {
   fromPlace   String?
   toPlace     String?
   travelDate  DateTime? @db.Date
+  flightNo    String?
   passportNo  String?
   currency    Currency  @default(USD)
   /// The visa sheet's NET.
@@ -371,6 +377,74 @@ model Visa {
   @@index([agencyId])
   @@index([deletedAt])
   @@map("visas")
+}
+
+/// A flight booking — the same shape as a visa request, plus the airline,
+/// flight and ticket numbers.
+model Flight {
+  id          String    @id @default(uuid()) @db.Uuid
+  number      Int       @unique @default(autoincrement())
+  status      Status    @default(NEW)
+  guestName   String
+  nationality String?
+  phone       String?
+  agencyId    String?   @db.Uuid
+  agency      Agency?   @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  pax         Int       @default(1)
+  fromPlace   String?
+  toPlace     String?
+  travelDate  DateTime? @db.Date
+  returnDate  DateTime? @db.Date
+  airline     String?
+  flightNo    String?
+  /// Ticket number or booking reference (PNR).
+  ticketNo    String?
+  passportNo  String?
+  currency    Currency  @default(EGP)
+  cost        Decimal?  @db.Decimal(12, 2)
+  sell        Decimal?  @db.Decimal(12, 2)
+  notes       String?
+  createdById String?   @db.Uuid
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([travelDate])
+  @@index([status])
+  @@index([agencyId])
+  @@index([deletedAt])
+  @@map("flights")
+}
+
+// ---------------------------------------------------------------------------
+// Attachments
+// ---------------------------------------------------------------------------
+
+enum AttachmentKind {
+  PASSPORT
+  TICKET
+}
+
+/// A passport or ticket image (or PDF) kept with a booking. The file itself is
+/// stored here, in the database: the API's own disk is wiped on every deploy,
+/// and this way the files are in every database backup.
+model Attachment {
+  id          String         @id @default(uuid()) @db.Uuid
+  /// SALE, HOTEL, VISA, FLIGHT…
+  entityType  String
+  entityId    String         @db.Uuid
+  kind        AttachmentKind
+  fileName    String
+  mimeType    String
+  size        Int
+  data        Bytes
+  createdById String?        @db.Uuid
+  createdBy   User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime       @default(now())
+
+  @@index([entityType, entityId])
+  @@map("attachments")
 }
 
 // ---------------------------------------------------------------------------

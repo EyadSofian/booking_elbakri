@@ -237,9 +237,11 @@ export const api = {
   delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
 
   /** Uploads a file with the auth header attached, without forcing a JSON body. */
-  upload: async <T>(path: string, file: File, field = 'file'): Promise<T> => {
+  upload: async <T>(path: string, file: File, field = 'file', fields: Record<string, string> = {}): Promise<T> => {
     const response = await withAuthRetry(() => {
       const form = new FormData();
+      // Text fields first, so the server has them when the file part arrives.
+      for (const [key, value] of Object.entries(fields)) form.append(key, value);
       form.append(field, file);
       const token = tokenStore.access;
       return fetch(buildUrl(path), {
@@ -250,6 +252,16 @@ export const api = {
     });
     if (!response.ok) throw await toApiError(response);
     return (await response.json()) as T;
+  },
+
+  /** Fetches a protected file (e.g. a passport scan) as a blob, with the auth header attached. */
+  blob: async (path: string): Promise<Blob> => {
+    const response = await withAuthRetry(() => {
+      const token = tokenStore.access;
+      return fetch(buildUrl(path), { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    });
+    if (!response.ok) throw await toApiError(response);
+    return response.blob();
   },
 
   /** Triggers a file download, preserving the server's filename. */

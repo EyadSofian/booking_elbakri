@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusMenu } from '@/components/shared/status';
 import { DateText, Money, RefTag } from '@/components/shared/format';
 import { ActivityList } from '@/components/shared/activity-list';
+import { Attachments } from '@/components/shared/attachments';
 import { ConfirmDialog, ErrorState, RowsSkeleton } from '@/components/shared/feedback';
 import { Field } from '@/components/shared/field';
 import { MoneyInput } from '@/components/ops/form-parts';
@@ -261,6 +262,15 @@ export default function SalePage() {
 
         <div className="space-y-5">
           <PaymentsCard sale={s} canEdit={canEdit} onChanged={refresh} onRemove={setRemovePayment} />
+
+          <Card className="animate-rise [animation-delay:140ms]">
+            <CardHeader>
+              <CardTitle>{t.files.section}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Attachments entityType="SALE" entityId={s.id} kinds={['PASSPORT']} canEdit={canEdit} onChanged={refresh} />
+            </CardContent>
+          </Card>
         </div>
       </div>
 

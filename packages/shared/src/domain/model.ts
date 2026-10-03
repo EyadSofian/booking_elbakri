@@ -32,10 +32,26 @@ export type TransferKind = (typeof TRANSFER_KINDS)[number];
 export const SALE_LINE_KINDS = ['HOTEL', 'FLIGHT', 'TRANSFER', 'SERVICE'] as const;
 export type SaleLineKind = (typeof SALE_LINE_KINDS)[number];
 
+/** Files kept with a booking: passport copies everywhere, tickets on visas and flights. */
+export const ATTACHMENT_KINDS = ['PASSPORT', 'TICKET'] as const;
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
+
+/** Which files each kind of record takes. */
+export const ATTACHMENT_KINDS_FOR: Partial<Record<EntityType, readonly AttachmentKind[]>> = {
+  SALE: ['PASSPORT'],
+  HOTEL: ['PASSPORT'],
+  VISA: ['PASSPORT', 'TICKET'],
+  FLIGHT: ['PASSPORT', 'TICKET'],
+};
+
+export const ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
+/** Photos and scans: what a phone camera or a scanner produces. */
+export const ATTACHMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
+
 export const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'CARD', 'INSTAPAY', 'OTHER'] as const;
 export type SalePaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export const ENTITY_TYPES = ['SALE', 'HOTEL', 'TRANSFER', 'EXCURSION', 'VISA'] as const;
+export const ENTITY_TYPES = ['SALE', 'HOTEL', 'TRANSFER', 'EXCURSION', 'VISA', 'FLIGHT'] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 /** Short prefix shown before a record number, e.g. H-120. */
@@ -45,6 +61,7 @@ export const REF_PREFIX: Record<EntityType, string> = {
   TRANSFER: 'T',
   EXCURSION: 'X',
   VISA: 'V',
+  FLIGHT: 'F',
 };
 
 export function formatRef(type: EntityType, number: number | null | undefined): string {
@@ -200,6 +217,8 @@ export interface UserSummary {
   role: Role;
   /** A sales supervisor: sees every salesperson's sales, not only their own. */
   seesAllSales: boolean;
+  /** A salesperson who may also work in Visas. */
+  visaAccess: boolean;
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -297,7 +316,32 @@ export interface VisaItem extends OpsBase {
   fromPlace: string | null;
   toPlace: string | null;
   travelDate: string | null;
+  flightNo: string | null;
   passportNo: string | null;
+}
+
+export interface FlightItem extends OpsBase {
+  pax: number;
+  fromPlace: string | null;
+  toPlace: string | null;
+  travelDate: string | null;
+  returnDate: string | null;
+  airline: string | null;
+  flightNo: string | null;
+  /** Ticket number or booking reference (PNR). */
+  ticketNo: string | null;
+  passportNo: string | null;
+}
+
+/** A passport or ticket file kept with a booking (the file itself is fetched separately). */
+export interface AttachmentItem {
+  id: string;
+  kind: AttachmentKind;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  createdBy: NamedRef | null;
+  createdAt: string;
 }
 
 export interface SalePaymentItem {
@@ -408,7 +452,7 @@ export interface DashboardData {
     openRequests: number;
     unassignedTransfers: number;
   };
-  openByType: Record<'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'SALE', number>;
+  openByType: Record<EntityType, number>;
   checkIns: HotelBookingItem[];
   checkOuts: HotelBookingItem[];
   transfers: TransferItem[];

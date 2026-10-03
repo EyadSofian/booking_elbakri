@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeftRight, ArrowRight, CircleDollarSign, FilePlus2, FileSpreadsheet, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, CircleDollarSign, FilePlus2, FileSpreadsheet, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import { STATUSES, type ActivityItem, type EntityType, type Status } from '@elbakri/shared';
 import type { Dictionary } from '@/i18n/dictionaries/en';
 import { useI18n } from '@/lib/providers';
@@ -44,6 +44,9 @@ function fieldLabel(t: Dictionary, key: string): string {
     pax: t.visas.pax,
     travelDate: t.visas.travelDate,
     passportNo: t.visas.passport,
+    returnDate: t.flights.returnDate,
+    airline: t.flights.airline,
+    ticketNo: t.flights.ticketNo,
     saleDate: t.sales.saleDate,
     destination: t.sales.destination,
     singleRooms: t.sales.single,
@@ -85,6 +88,8 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   DELETED: Trash2,
   PAYMENT_ADDED: CircleDollarSign,
   PAYMENT_REMOVED: CircleDollarSign,
+  FILE_ADDED: Paperclip,
+  FILE_REMOVED: Paperclip,
 };
 
 /** Who did what and when, newest first. */
@@ -92,8 +97,8 @@ export function ActivityList({ items, type, loading }: { items: ActivityItem[] |
   const { t, locale } = useI18n();
   const verbs: Record<string, string> =
     locale === 'ar'
-      ? { CREATED: 'سجّل الحجز', IMPORTED: 'اتستورد من الشيت', UPDATED: 'عدّل', STATUS: 'غيّر الحالة', DELETED: 'مسح', PAYMENT_ADDED: 'سجّل دفعة', PAYMENT_REMOVED: 'مسح دفعة' }
-      : { CREATED: 'created this', IMPORTED: 'imported from the sheet', UPDATED: 'edited', STATUS: 'changed the status', DELETED: 'deleted', PAYMENT_ADDED: 'recorded a payment', PAYMENT_REMOVED: 'removed a payment' };
+      ? { CREATED: 'سجّل الحجز', IMPORTED: 'اتستورد من الشيت', UPDATED: 'عدّل', STATUS: 'غيّر الحالة', DELETED: 'مسح', PAYMENT_ADDED: 'سجّل دفعة', PAYMENT_REMOVED: 'مسح دفعة', FILE_ADDED: 'رفع ملف', FILE_REMOVED: 'شال ملف' }
+      : { CREATED: 'created this', IMPORTED: 'imported from the sheet', UPDATED: 'edited', STATUS: 'changed the status', DELETED: 'deleted', PAYMENT_ADDED: 'recorded a payment', PAYMENT_REMOVED: 'removed a payment', FILE_ADDED: 'uploaded a file', FILE_REMOVED: 'removed a file' };
 
   if (loading) return <div className="h-16 animate-pulse rounded-lg bg-surface-sunken" />;
   if (!items?.length) return <p className="text-sm text-muted-foreground">{t.common.noHistory}</p>;

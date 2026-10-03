@@ -11,6 +11,7 @@ import { HotelBookingsService } from '../ops/hotel-bookings.module';
 import { TransfersService } from '../ops/transfers.module';
 import { ExcursionsService } from '../ops/excursions.module';
 import { VisasService } from '../ops/visas.module';
+import { FlightsService } from '../ops/flights.module';
 import { SalesService, SalesListQuery, totalsByCurrency } from '../sales/sales.module';
 import { baseInclude } from '../ops/ops-common';
 
@@ -44,6 +45,7 @@ export class DashboardService {
     private readonly transfers: TransfersService,
     private readonly excursions: ExcursionsService,
     private readonly visas: VisasService,
+    private readonly flights: FlightsService,
     private readonly sales: SalesService,
     config: ConfigService,
   ) {
@@ -57,7 +59,7 @@ export class DashboardService {
     const live = { deletedAt: null, status: { not: 'CANCELLED' as const } };
     const hotelInclude = { ...baseInclude, hotel: { select: { id: true, name: true, city: true } } };
 
-    const [checkIns, checkOuts, transfers, excursions, openHotels, openTransfers, openExcursions, openVisas, openSales, unassigned] =
+    const [checkIns, checkOuts, transfers, excursions, openHotels, openTransfers, openExcursions, openVisas, openFlights, openSales, unassigned] =
       await Promise.all([
         this.prisma.hotelBooking.findMany({ where: { ...live, checkIn: date }, include: hotelInclude, orderBy: { guestName: 'asc' } }),
         this.prisma.hotelBooking.findMany({ where: { ...live, checkOut: date }, include: hotelInclude, orderBy: { guestName: 'asc' } }),
@@ -67,17 +69,19 @@ export class DashboardService {
         this.prisma.transfer.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { date: { sort: 'asc', nulls: 'last' } }, take: 30 }),
         this.prisma.excursion.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { date: { sort: 'asc', nulls: 'last' } }, take: 30 }),
         this.prisma.visa.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { travelDate: { sort: 'asc', nulls: 'last' } }, take: 30 }),
+        this.prisma.flight.findMany({ where: { deletedAt: null, status: open }, include: baseInclude, orderBy: { travelDate: { sort: 'asc', nulls: 'last' } }, take: 30 }),
         user.role === 'OPERATIONS' ? 0 : this.prisma.sale.count({ where: { deletedAt: null, status: open, ...this.sales.scopeFor(user) } }),
         this.prisma.transfer.count({
           where: { deletedAt: null, driverName: null, status: { notIn: ['CANCELLED', 'DONE'] }, date: { gte: new Date(`${today}T00:00:00Z`) } },
         }),
       ]);
 
-    const [hotelOpenCount, transferOpenCount, excursionOpenCount, visaOpenCount] = await Promise.all([
+    const [hotelOpenCount, transferOpenCount, excursionOpenCount, visaOpenCount, flightOpenCount] = await Promise.all([
       this.prisma.hotelBooking.count({ where: { deletedAt: null, status: open } }),
       this.prisma.transfer.count({ where: { deletedAt: null, status: open } }),
       this.prisma.excursion.count({ where: { deletedAt: null, status: open } }),
       this.prisma.visa.count({ where: { deletedAt: null, status: open } }),
+      this.prisma.flight.count({ where: { deletedAt: null, status: open } }),
     ]);
 
     type Req = DashboardData['requests'][number];
@@ -97,6 +101,10 @@ export class DashboardService {
       ...openVisas.map((v) => this.visas.toItem(v)).map((v): Req => ({
         type: 'VISA', id: v.id, ref: v.ref, status: v.status, title: v.guestName,
         subtitle: [v.fromPlace, v.toPlace].filter(Boolean).join(' → ') || null, date: v.travelDate, createdAt: v.createdAt,
+      })),
+      ...openFlights.map((f) => this.flights.toItem(f)).map((f): Req => ({
+        type: 'FLIGHT', id: f.id, ref: f.ref, status: f.status, title: f.guestName,
+        subtitle: [f.fromPlace, f.toPlace].filter(Boolean).join(' → ') || null, date: f.travelDate, createdAt: f.createdAt,
       })),
     ]
       .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'))
@@ -123,7 +131,7 @@ export class DashboardService {
         checkOuts: checkOuts.length,
         transfers: transfers.length,
         excursions: excursions.length,
-        openRequests: hotelOpenCount + transferOpenCount + excursionOpenCount + visaOpenCount,
+        openRequests: hotelOpenCount + transferOpenCount + excursionOpenCount + visaOpenCount + flightOpenCount,
         unassignedTransfers: unassigned,
       },
       openByType: {
@@ -131,6 +139,7 @@ export class DashboardService {
         TRANSFER: transferOpenCount,
         EXCURSION: excursionOpenCount,
         VISA: visaOpenCount,
+        FLIGHT: flightOpenCount,
         SALE: openSales,
       },
       checkIns: checkIns.map((h) => this.hotels.toItem(h)),
@@ -145,25 +154,27 @@ export class DashboardService {
   /** Open (new + in progress) bookings per module — the badges in the menu. */
   async openCounts(user: AuthUser) {
     const where = { deletedAt: null, status: open };
-    const [HOTEL, TRANSFER, EXCURSION, VISA, SALE] = await Promise.all([
+    const [HOTEL, TRANSFER, EXCURSION, VISA, FLIGHT, SALE] = await Promise.all([
       this.prisma.hotelBooking.count({ where }),
       this.prisma.transfer.count({ where }),
       this.prisma.excursion.count({ where }),
       this.prisma.visa.count({ where }),
+      this.prisma.flight.count({ where }),
       user.role === 'OPERATIONS' ? 0 : this.prisma.sale.count({ where: { ...where, ...this.sales.scopeFor(user) } }),
     ]);
-    return { HOTEL, TRANSFER, EXCURSION, VISA, SALE };
+    return { HOTEL, TRANSFER, EXCURSION, VISA, FLIGHT, SALE };
   }
 
   /** The month (or any range) at a glance: sales money, and operations volume. */
   async report(from: string, to: string) {
     const range = Object.assign(new ListQueryDto(), { page: 1, pageSize: 100000, dateFrom: from, dateTo: to });
-    const [sales, hotels, transfers, excursions, visas] = await Promise.all([
+    const [sales, hotels, transfers, excursions, visas, flights] = await Promise.all([
       this.sales.list(Object.assign(new SalesListQuery(), range, { dateBy: 'sale' })),
       this.hotels.list(Object.assign(new ListQueryDto(), range)),
       this.transfers.list(Object.assign(new ListQueryDto(), range)),
       this.excursions.list(Object.assign(new ListQueryDto(), range)),
       this.visas.list(Object.assign(new ListQueryDto(), range)),
+      this.flights.list(Object.assign(new ListQueryDto(), range)),
     ]);
 
     const liveSales = sales.data.filter((s) => s.status !== 'CANCELLED');
@@ -178,10 +189,10 @@ export class DashboardService {
       bySeller.set(key, row);
     }
 
-    const byAgency = new Map<string, { agency: string; hotels: number; transfers: number; excursions: number; visas: number; total: number }>();
-    const bump = (name: string | undefined, field: 'hotels' | 'transfers' | 'excursions' | 'visas') => {
+    const byAgency = new Map<string, { agency: string; hotels: number; transfers: number; excursions: number; visas: number; flights: number; total: number }>();
+    const bump = (name: string | undefined, field: 'hotels' | 'transfers' | 'excursions' | 'visas' | 'flights') => {
       const key = name ?? '—';
-      const row = byAgency.get(key) ?? { agency: key, hotels: 0, transfers: 0, excursions: 0, visas: 0, total: 0 };
+      const row = byAgency.get(key) ?? { agency: key, hotels: 0, transfers: 0, excursions: 0, visas: 0, flights: 0, total: 0 };
       row[field] += 1;
       row.total += 1;
       byAgency.set(key, row);
@@ -191,6 +202,7 @@ export class DashboardService {
     live(transfers.data).forEach((t) => bump(t.agency?.name, 'transfers'));
     live(excursions.data).forEach((x) => bump(x.agency?.name, 'excursions'));
     live(visas.data).forEach((v) => bump(v.agency?.name, 'visas'));
+    live(flights.data).forEach((f) => bump(f.agency?.name, 'flights'));
 
     const r2 = (n: number) => Math.round(n * 100) / 100;
     return {
@@ -204,7 +216,7 @@ export class DashboardService {
         counts: sales.counts,
       },
       operations: {
-        counts: { HOTEL: hotels.counts, TRANSFER: transfers.counts, EXCURSION: excursions.counts, VISA: visas.counts },
+        counts: { HOTEL: hotels.counts, TRANSFER: transfers.counts, EXCURSION: excursions.counts, VISA: visas.counts, FLIGHT: flights.counts },
         hotelNights: live(hotels.data).reduce((sum, h) => sum + (h.nights ?? 0), 0),
         byAgency: [...byAgency.values()].sort((a, b) => b.total - a.total),
       },
@@ -214,16 +226,18 @@ export class DashboardService {
   /** One box that finds any booking by name, phone, reference, hotel or flight. */
   async search(q: string, user: AuthUser) {
     const query = Object.assign(new ListQueryDto(), { q, page: 1, pageSize: 6 });
-    // Salespeople only work in Sales and operations never see Sales, so each
-    // searches only their own side. The admin searches both.
+    // Salespeople only work in Sales (plus Visas, when given access) and
+    // operations never see Sales, so each searches only their own side.
+    // The admin searches both.
     const ops = user.role !== 'SALES';
     const none = { data: [] };
-    const [sales, hotels, transfers, excursions, visas] = await Promise.all([
+    const [sales, hotels, transfers, excursions, visas, flights] = await Promise.all([
       user.role === 'OPERATIONS' ? none : this.sales.list(Object.assign(new SalesListQuery(), query), user),
       ops ? this.hotels.list(query) : none,
       ops ? this.transfers.list(query) : none,
       ops ? this.excursions.list(query) : none,
-      ops ? this.visas.list(query) : none,
+      ops || user.visaAccess ? this.visas.list(query) : none,
+      ops ? this.flights.list(query) : none,
     ]);
     type Hit = { type: EntityType; id: string; ref: string; title: string; subtitle: string | null; date: string | null; status: Status };
     const hits: Hit[] = [
@@ -232,6 +246,7 @@ export class DashboardService {
       ...transfers.data.map((t): Hit => ({ type: 'TRANSFER', id: t.id, ref: t.ref, title: t.guestName, subtitle: [t.fromPlace, t.toPlace].filter(Boolean).join(' → ') || null, date: t.date, status: t.status })),
       ...excursions.data.map((x): Hit => ({ type: 'EXCURSION', id: x.id, ref: x.ref, title: x.guestName, subtitle: x.activity, date: x.date, status: x.status })),
       ...visas.data.map((v): Hit => ({ type: 'VISA', id: v.id, ref: v.ref, title: v.guestName, subtitle: [v.fromPlace, v.toPlace].filter(Boolean).join(' → ') || null, date: v.travelDate, status: v.status })),
+      ...flights.data.map((f): Hit => ({ type: 'FLIGHT', id: f.id, ref: f.ref, title: f.guestName, subtitle: [f.fromPlace, f.toPlace].filter(Boolean).join(' → ') || null, date: f.travelDate, status: f.status })),
     ];
     return hits;
   }

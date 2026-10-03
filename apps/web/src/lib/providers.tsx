@@ -43,6 +43,10 @@ export interface SessionUser {
   name: string;
   email: string;
   role: Role;
+  /** A sales supervisor: sees every salesperson's sales. */
+  seesAllSales?: boolean;
+  /** A salesperson who may also work in Visas. */
+  visaAccess?: boolean;
 }
 
 interface SessionValue {

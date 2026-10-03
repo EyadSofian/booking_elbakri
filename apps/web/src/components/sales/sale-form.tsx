@@ -21,6 +21,7 @@ import { Field, FormSection } from '@/components/shared/field';
 import { StatusPicker } from '@/components/shared/status';
 import { CurrencySelect, SellerSelect, SuggestInput } from '@/components/shared/pickers';
 import { ConfirmDialog } from '@/components/shared/feedback';
+import { Attachments, uploadPending, type PendingFile } from '@/components/shared/attachments';
 import { MoneyInput } from '@/components/ops/form-parts';
 import { asCurrency, asStatus, int, num, str, toStr, useDraft, type Draft } from '@/components/ops/draft';
 
@@ -256,6 +257,8 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
   const { draft: d, set, errors } = form;
   const [leave, setLeave] = React.useState<string | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
+  // Passport copies chosen on a new sale wait here and are uploaded once it is saved.
+  const [pending, setPending] = React.useState<PendingFile[]>([]);
 
   const lines = readLines(d);
   const setLines = (next: LineDraft[]) => set('lines', writeLines(next));
@@ -275,11 +278,18 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
   const money = (v: number) => `${formatNumber(v, locale)} ${t.currencies[currency]}`;
 
   const save = useMutation({
-    mutationFn: (body: Record<string, unknown>) => (sale ? api.patch<SaleDetail>(`/sales/${sale.id}`, body) : api.post<SaleDetail>('/sales', body)),
-    onSuccess: (saved) => {
+    mutationFn: async (body: Record<string, unknown>) => {
+      const saved = await (sale ? api.patch<SaleDetail>(`/sales/${sale.id}`, body) : api.post<SaleDetail>('/sales', body));
+      const failed = pending.length ? await uploadPending('SALE', saved.id, pending) : 0;
+      return { saved, failed };
+    },
+    onSuccess: ({ saved, failed }) => {
       form.reset(saleToDraft(saved));
+      setPending([]);
       invalidate('/sales');
       toast.success(sale ? t.common.saved : `${t.common.created} · ${saved.ref}`);
+      // The sale is saved either way; say so if a file did not make it.
+      if (failed) toast.error(`${t.files.section}: ${t.errors.INTERNAL_ERROR}`);
       router.push(`/sales/${saved.id}`);
     },
     onError: (e) => {
@@ -325,7 +335,7 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => (form.dirty ? setLeave(back) : router.push(back))}
+            onClick={() => (form.dirty || pending.length ? setLeave(back) : router.push(back))}
             aria-label={t.common.back}
           >
             <BackIcon />
@@ -474,6 +484,10 @@ export function SaleForm({ sale }: { sale?: SaleDetail }) {
                 </div>
               </FormSection>
             ) : null}
+
+            <FormSection title={t.files.PASSPORT} hint={t.files.hint}>
+              <Attachments entityType="SALE" entityId={sale?.id} kinds={['PASSPORT']} pending={pending} onPending={setPending} />
+            </FormSection>
 
             <FormSection title={t.common.notes}>
               <Field label={t.common.status}>

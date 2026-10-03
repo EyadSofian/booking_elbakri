@@ -3,6 +3,7 @@ import type { Role } from '@elbakri/shared';
 
 export const PUBLIC_KEY = 'is_public';
 export const ROLES_KEY = 'allowed_roles';
+export const FLAG_KEY = 'allowed_flag';
 
 /** Reachable without signing in. */
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
@@ -13,6 +14,15 @@ export const Public = () => SetMetadata(PUBLIC_KEY, true);
  */
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
+/** Per-person switches that open an area beyond the person's role. */
+export type AccessFlag = 'visaAccess';
+
+/**
+ * Also lets in anyone with this switch turned on, whatever their role — e.g. a
+ * salesperson given access to Visas. Used together with @Roles.
+ */
+export const OrFlag = (flag: AccessFlag) => SetMetadata(FLAG_KEY, flag);
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -20,6 +30,8 @@ export interface AuthUser {
   role: Role;
   /** A sales supervisor: sees every salesperson's sales. */
   seesAllSales: boolean;
+  /** A salesperson who may also work in Visas. */
+  visaAccess: boolean;
   sessionId: string;
 }
 

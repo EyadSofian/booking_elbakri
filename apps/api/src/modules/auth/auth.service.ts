@@ -12,6 +12,8 @@ export interface SessionUserDto {
   name: string;
   email: string;
   role: Role;
+  seesAllSales: boolean;
+  visaAccess: boolean;
 }
 
 export interface TokenResponse {
@@ -65,7 +67,7 @@ export class AuthService {
     return {
       ...(await this.accessToken(user.id, session.id)),
       refreshToken: `${session.id}.${secret}`,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, seesAllSales: user.seesAllSales, visaAccess: user.visaAccess },
     };
   }
 
@@ -100,7 +102,7 @@ export class AuthService {
     return {
       ...(await this.accessToken(user.id, session.id)),
       refreshToken: compositeToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, seesAllSales: user.seesAllSales, visaAccess: user.visaAccess },
     };
   }
 

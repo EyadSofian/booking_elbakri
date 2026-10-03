@@ -2,10 +2,10 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowDownUp, ArrowDown, ArrowUp, Copy, Pencil, Plus, Trash2, type LucideIcon } from 'lucide-react';
-import type { EntityType, OpsBase, Status } from '@elbakri/shared';
+import { ATTACHMENT_KINDS_FOR, type EntityType, type OpsBase, type Status } from '@elbakri/shared';
 import type { Dictionary } from '@/i18n/dictionaries/en';
 import { ApiError, api } from '@/lib/api-client';
 import { useI18n, useSession } from '@/lib/providers';
@@ -17,11 +17,12 @@ import { NativeSelect } from '@/components/ui/input';
 import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle, DialogDescription, SheetContent } from '@/components/ui/dialog';
 import { StatusMenu } from '@/components/shared/status';
 import { DateText, RefTag, Txt } from '@/components/shared/format';
-import { Segmented } from '@/components/shared/field';
+import { FormSection, Segmented } from '@/components/shared/field';
 import { ConfirmDialog, EmptyState, ErrorState, RowsSkeleton } from '@/components/shared/feedback';
 import { ExportButton, Pagination, SearchBox } from '@/components/shared/list-controls';
 import { AgencyFilter } from '@/components/shared/pickers';
 import { ActivityList } from '@/components/shared/activity-list';
+import { Attachments, uploadPending, type PendingFile } from '@/components/shared/attachments';
 import { useDraft, type Draft } from './draft';
 
 export interface Ctx {
@@ -48,7 +49,7 @@ export interface FormProps<T> {
 type When = 'upcoming' | 'today' | 'tomorrow' | 'past' | 'all';
 
 export interface OpsConfig<T extends OpsBase> {
-  type: 'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA';
+  type: 'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'FLIGHT';
   endpoint: string;
   icon: LucideIcon;
   title: (t: Dictionary) => string;
@@ -503,6 +504,8 @@ function OpsDetails<T extends OpsBase>({
     onError: (e) => toast.error(errorMessage(e)),
   });
   const head = config.headline(row, ctx);
+  const qc = useQueryClient();
+  const kinds = ATTACHMENT_KINDS_FOR[config.type];
   const duplicate = () => onDuplicate({ ...config.toDraft(row), status: 'NEW' });
 
   return (
@@ -540,6 +543,20 @@ function OpsDetails<T extends OpsBase>({
             </dl>
           </section>
         ))}
+
+        {kinds ? (
+          <section>
+            <h3 className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted-foreground">{t.files.section}</h3>
+            <div className="rounded-xl border bg-surface p-4">
+              <Attachments
+                entityType={config.type}
+                entityId={row.id}
+                kinds={kinds}
+                onChanged={() => void qc.invalidateQueries({ queryKey: [config.endpoint, 'activity', row.id] })}
+              />
+            </div>
+          </section>
+        ) : null}
 
         <section>
           <h3 className="mb-3 text-[0.72rem] font-semibold uppercase tracking-wide text-muted-foreground">{t.common.history}</h3>
@@ -606,14 +623,23 @@ function OpsForm<T extends OpsBase>({
   const { t, errorMessage } = useI18n();
   const form = useDraft(initial);
   const formRef = React.useRef<HTMLFormElement>(null);
-  dirtyRef.current = form.dirty;
+  const kinds = ATTACHMENT_KINDS_FOR[config.type];
+  // Files chosen on a new booking wait here and are uploaded once it is saved.
+  const [pending, setPending] = React.useState<PendingFile[]>([]);
+  dirtyRef.current = form.dirty || pending.length > 0;
 
   const save = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      record ? api.patch<T>(`${config.endpoint}/${record.id}`, body) : api.post<T>(config.endpoint, body),
-    onSuccess: (row) => {
+    mutationFn: async (body: Record<string, unknown>) => {
+      const row = await (record ? api.patch<T>(`${config.endpoint}/${record.id}`, body) : api.post<T>(config.endpoint, body));
+      const failed = pending.length ? await uploadPending(config.type, row.id, pending) : 0;
+      return { row, failed };
+    },
+    onSuccess: ({ row, failed }) => {
       dirtyRef.current = false;
+      setPending([]);
       toast.success(record ? t.common.saved : `${t.common.created} · ${row.ref}`);
+      // The booking is saved either way; say so if a file did not make it.
+      if (failed) toast.error(`${t.files.section}: ${t.errors.INTERNAL_ERROR}`);
       onSaved(row);
     },
     onError: (e) => {
@@ -649,6 +675,11 @@ function OpsForm<T extends OpsBase>({
       </DialogHeader>
       <DialogBody className="space-y-7">
         <Form draft={form.draft} set={form.set} errors={form.errors} record={record} />
+        {kinds ? (
+          <FormSection title={t.files.section} hint={t.files.hint}>
+            <Attachments entityType={config.type} entityId={record?.id} kinds={kinds} pending={pending} onPending={setPending} />
+          </FormSection>
+        ) : null}
       </DialogBody>
       <DialogFooter>
         <Button variant="ghost" onClick={onCancel}>

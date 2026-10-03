@@ -20,6 +20,9 @@ class CreateUserDto {
   @IsBoolean() @IsOptional()
   seesAllSales?: boolean;
 
+  @IsBoolean() @IsOptional()
+  visaAccess?: boolean;
+
   @IsString() @MinLength(8) @MaxLength(200)
   password!: string;
 }
@@ -38,6 +41,9 @@ class UpdateUserDto {
   seesAllSales?: boolean;
 
   @IsBoolean() @IsOptional()
+  visaAccess?: boolean;
+
+  @IsBoolean() @IsOptional()
   isActive?: boolean;
 
   /** Sets a new password for the user (an admin reset). */
@@ -45,9 +51,9 @@ class UpdateUserDto {
   password?: string;
 }
 
-const SELECT = { id: true, name: true, email: true, role: true, seesAllSales: true, isActive: true, lastLoginAt: true, createdAt: true } as const;
+const SELECT = { id: true, name: true, email: true, role: true, seesAllSales: true, visaAccess: true, isActive: true, lastLoginAt: true, createdAt: true } as const;
 
-function toSummary(u: { id: string; name: string; email: string; role: Role; seesAllSales: boolean; isActive: boolean; lastLoginAt: Date | null; createdAt: Date }): UserSummary {
+function toSummary(u: { id: string; name: string; email: string; role: Role; seesAllSales: boolean; visaAccess: boolean; isActive: boolean; lastLoginAt: Date | null; createdAt: Date }): UserSummary {
   return { ...u, lastLoginAt: u.lastLoginAt?.toISOString() ?? null, createdAt: u.createdAt.toISOString() };
 }
 
@@ -80,6 +86,7 @@ export class UsersService {
         email,
         role: dto.role,
         seesAllSales: dto.role === 'SALES' && Boolean(dto.seesAllSales),
+        visaAccess: dto.role === 'SALES' && Boolean(dto.visaAccess),
         passwordHash: await AuthService.hashPassword(dto.password),
       },
       select: SELECT,
@@ -112,6 +119,8 @@ export class UsersService {
         role: dto.role,
         // Only a salesperson can be a sales supervisor.
         seesAllSales: (dto.role ?? user.role) === 'SALES' ? dto.seesAllSales : false,
+        // Operations and admins already work in Visas; the switch is for salespeople.
+        visaAccess: (dto.role ?? user.role) === 'SALES' ? dto.visaAccess : false,
         isActive: dto.isActive,
         passwordHash: dto.password ? await AuthService.hashPassword(dto.password) : undefined,
       },

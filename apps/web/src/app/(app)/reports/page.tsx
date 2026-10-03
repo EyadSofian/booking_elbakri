@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, BedDouble, CarFront, FileBadge, TentTree } from 'lucide-react';
+import { BarChart3, BedDouble, CarFront, FileBadge, Plane, TentTree } from 'lucide-react';
 import { STATUSES, type CurrencyCode, type StatusCounts } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
 import { useI18n, useSession } from '@/lib/providers';
@@ -27,9 +27,9 @@ interface Report {
     counts: StatusCounts;
   };
   operations: {
-    counts: Record<'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA', StatusCounts>;
+    counts: Record<'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'FLIGHT', StatusCounts>;
     hotelNights: number;
-    byAgency: Array<{ agency: string; hotels: number; transfers: number; excursions: number; visas: number; total: number }>;
+    byAgency: Array<{ agency: string; hotels: number; transfers: number; excursions: number; visas: number; flights: number; total: number }>;
   };
 }
 
@@ -60,11 +60,12 @@ export default function ReportsPage() {
   });
   const r = report.data;
 
-  const opsCards: Array<{ key: 'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA'; label: string; icon: typeof BedDouble }> = [
+  const opsCards: Array<{ key: 'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'FLIGHT'; label: string; icon: typeof BedDouble }> = [
     { key: 'HOTEL', label: t.nav.hotels, icon: BedDouble },
     { key: 'TRANSFER', label: t.nav.transfers, icon: CarFront },
     { key: 'EXCURSION', label: t.nav.excursions, icon: TentTree },
     { key: 'VISA', label: t.nav.visas, icon: FileBadge },
+    { key: 'FLIGHT', label: t.nav.flights, icon: Plane },
   ];
 
   if (!isAdmin) return null;
@@ -176,7 +177,7 @@ export default function ReportsPage() {
               </span>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {opsCards.map((c) => {
                   const counts = r.operations.counts[c.key];
                   const total = counts.ALL || 1;
@@ -219,6 +220,7 @@ export default function ReportsPage() {
                           <th className="px-3 py-2 text-end font-semibold">{t.nav.transfers}</th>
                           <th className="px-3 py-2 text-end font-semibold">{t.nav.excursions}</th>
                           <th className="px-3 py-2 text-end font-semibold">{t.nav.visas}</th>
+                          <th className="px-3 py-2 text-end font-semibold">{t.nav.flights}</th>
                           <th className="px-3 py-2 text-end font-semibold">{t.reports.bookings}</th>
                         </tr>
                       </thead>
@@ -226,7 +228,7 @@ export default function ReportsPage() {
                         {r.operations.byAgency.map((a) => (
                           <tr key={a.agency}>
                             <td className="px-3 py-2 font-medium">{a.agency}</td>
-                            {[a.hotels, a.transfers, a.excursions, a.visas].map((n, i) => (
+                            {[a.hotels, a.transfers, a.excursions, a.visas, a.flights].map((n, i) => (
                               <td key={i} className={cn('px-3 py-2 text-end tabular', !n && 'text-muted-foreground/50')}>{n}</td>
                             ))}
                             <td className="px-3 py-2 text-end tabular font-semibold">{a.total}</td>

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CarFront, FileBadge, Hotel, LogOut, Menu as MenuIcon, Moon, Plus, ShoppingBag, Sun, TentTree, UserRound, X } from 'lucide-react';
+import { CarFront, FileBadge, Hotel, LogOut, Menu as MenuIcon, Moon, Plane, Plus, ShoppingBag, Sun, TentTree, UserRound, X } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { useI18n, useSession, useTheme } from '@/lib/providers';
 import { LOCALE_META, LOCALES } from '@/i18n/config';
@@ -15,7 +15,7 @@ import { BrandLogo } from './brand-logo';
 import { GlobalSearch } from './global-search';
 import { NAV, allowedFor, homeFor, isActive } from './nav';
 
-type OpenCounts = Record<'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'SALE', number>;
+type OpenCounts = Record<'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'FLIGHT' | 'SALE', number>;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -29,7 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && !user) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [loading, user, router, pathname]);
-  const allowed = allowedFor(user?.role, pathname);
+  const allowed = allowedFor(user, pathname);
   useEffect(() => {
     if (user && !allowed) router.replace(homeFor(user.role));
   }, [user, allowed, router]);
@@ -53,7 +53,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.roles || is(...i.roles)) })).filter((g) => g.items.length);
+  const groups = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.roles || is(...i.roles) || Boolean(i.flag && user[i.flag])),
+  })).filter((g) => g.items.length);
 
   const nav = (
     <nav className="scroll-thin flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label={t.nav.operations}>
@@ -125,7 +128,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: '/hotels?new=1', icon: Hotel, label: t.dashboard.newHotel, show: is('OPERATIONS') },
     { href: '/transfers?new=1', icon: CarFront, label: t.dashboard.newTransfer, show: is('OPERATIONS') },
     { href: '/excursions?new=1', icon: TentTree, label: t.dashboard.newExcursion, show: is('OPERATIONS') },
-    { href: '/visas?new=1', icon: FileBadge, label: t.dashboard.newVisa, show: is('OPERATIONS') },
+    { href: '/visas?new=1', icon: FileBadge, label: t.dashboard.newVisa, show: is('OPERATIONS') || Boolean(user.visaAccess) },
+    { href: '/flights?new=1', icon: Plane, label: t.dashboard.newFlight, show: is('OPERATIONS') },
   ].filter((i) => i.show);
 
   return (

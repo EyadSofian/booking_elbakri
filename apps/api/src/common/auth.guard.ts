@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import type { Role } from '@elbakri/shared';
 import { DomainError, ForbiddenError } from './errors';
-import { PUBLIC_KEY, ROLES_KEY, type AuthUser } from './auth';
+import { FLAG_KEY, PUBLIC_KEY, ROLES_KEY, type AccessFlag, type AuthUser } from './auth';
 import { PrismaService } from './prisma.service';
 
 /**
@@ -48,7 +48,7 @@ export class AuthGuard implements CanActivate {
       select: {
         revokedAt: true,
         expiresAt: true,
-        user: { select: { id: true, name: true, email: true, role: true, seesAllSales: true, isActive: true } },
+        user: { select: { id: true, name: true, email: true, role: true, seesAllSales: true, visaAccess: true, isActive: true } },
       },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date() || !session.user.isActive) {
@@ -61,13 +61,16 @@ export class AuthGuard implements CanActivate {
       email: session.user.email,
       role: session.user.role,
       seesAllSales: session.user.seesAllSales,
+      visaAccess: session.user.visaAccess,
       sessionId: payload.sid,
     };
     request.user = user;
 
     const allowed = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, targets);
     if (allowed && user.role !== 'ADMIN' && !allowed.includes(user.role)) {
-      throw new ForbiddenError();
+      // The class may open the area to people with a switch turned on.
+      const flag = this.reflector.get<AccessFlag | undefined>(FLAG_KEY, context.getClass());
+      if (!flag || !user[flag]) throw new ForbiddenError();
     }
     return true;
   }

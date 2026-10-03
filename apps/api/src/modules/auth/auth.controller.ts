@@ -58,7 +58,7 @@ export class AuthController {
   @ApiBearerAuth()
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    return { id: user.id, name: user.name, email: user.email, role: user.role, seesAllSales: user.seesAllSales, visaAccess: user.visaAccess };
   }
 
   @ApiBearerAuth()

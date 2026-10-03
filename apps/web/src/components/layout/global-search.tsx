@@ -28,6 +28,7 @@ export const ENTITY_ROUTE: Record<EntityType, (id: string) => string> = {
   TRANSFER: (id) => `/transfers?open=${id}`,
   EXCURSION: (id) => `/excursions?open=${id}`,
   VISA: (id) => `/visas?open=${id}`,
+  FLIGHT: (id) => `/flights?open=${id}`,
 };
 
 /** One box that finds any booking — press ⌘K / Ctrl K from anywhere. */

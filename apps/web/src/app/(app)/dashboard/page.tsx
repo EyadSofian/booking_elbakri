@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  AlarmClock, ArrowRight, BedDouble, CarFront, FileBadge, Hotel, LogIn, LogOut, ShoppingBag, TentTree, UserX, Wallet,
+  AlarmClock, ArrowRight, BedDouble, CarFront, FileBadge, Hotel, LogIn, LogOut, Plane, ShoppingBag, TentTree, UserX, Wallet,
 } from 'lucide-react';
 import { hotelOwed, type DashboardData, type EntityType, type Status } from '@elbakri/shared';
 import { api } from '@/lib/api-client';
@@ -26,6 +26,7 @@ const ENDPOINT: Record<Exclude<EntityType, 'SALE'>, string> = {
   TRANSFER: '/transfers',
   EXCURSION: '/excursions',
   VISA: '/visas',
+  FLIGHT: '/flights',
 };
 
 const TYPE_ICON: Record<EntityType, typeof Hotel> = {
@@ -34,6 +35,7 @@ const TYPE_ICON: Record<EntityType, typeof Hotel> = {
   TRANSFER: CarFront,
   EXCURSION: TentTree,
   VISA: FileBadge,
+  FLIGHT: Plane,
 };
 
 export default function DashboardPage() {
@@ -104,6 +106,7 @@ export default function DashboardPage() {
           { href: '/transfers?new=1', label: t.dashboard.newTransfer, icon: CarFront, show: true },
           { href: '/excursions?new=1', label: t.dashboard.newExcursion, icon: TentTree, show: true },
           { href: '/visas?new=1', label: t.dashboard.newVisa, icon: FileBadge, show: true },
+          { href: '/flights?new=1', label: t.dashboard.newFlight, icon: Plane, show: true },
         ]
           .filter((a) => a.show)
           .map((a) => (

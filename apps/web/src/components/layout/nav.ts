@@ -1,5 +1,5 @@
 import {
-  BarChart3, CarFront, FileBadge, Home, Hotel, Settings, ShoppingBag, TentTree, type LucideIcon,
+  BarChart3, CarFront, FileBadge, Home, Hotel, Plane, Settings, ShoppingBag, TentTree, type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@elbakri/shared';
 import type { Dictionary } from '@/i18n/dictionaries/en';
@@ -10,8 +10,10 @@ export interface NavItem {
   label: (t: Dictionary) => string;
   /** Who sees it. Admins see everything. Leave out for everyone. */
   roles?: Role[];
+  /** Also shown to anyone with this switch on, e.g. a salesperson given Visas. */
+  flag?: 'visaAccess';
   /** The open-requests badge comes from this dashboard counter. */
-  badge?: 'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'SALE';
+  badge?: 'HOTEL' | 'TRANSFER' | 'EXCURSION' | 'VISA' | 'FLIGHT' | 'SALE';
 }
 
 export interface NavGroup {
@@ -21,7 +23,7 @@ export interface NavGroup {
 }
 
 /**
- * The whole app in eight places. Salespeople see Sales only; operations see
+ * The whole app in nine places. Salespeople see Sales only; operations see
  * everything except Sales. Their account is under the avatar menu.
  */
 export const NAV: NavGroup[] = [
@@ -37,7 +39,8 @@ export const NAV: NavGroup[] = [
       { href: '/hotels', icon: Hotel, label: (t) => t.nav.hotels, badge: 'HOTEL', roles: ['OPERATIONS'] },
       { href: '/transfers', icon: CarFront, label: (t) => t.nav.transfers, badge: 'TRANSFER', roles: ['OPERATIONS'] },
       { href: '/excursions', icon: TentTree, label: (t) => t.nav.excursions, badge: 'EXCURSION', roles: ['OPERATIONS'] },
-      { href: '/visas', icon: FileBadge, label: (t) => t.nav.visas, badge: 'VISA', roles: ['OPERATIONS'] },
+      { href: '/visas', icon: FileBadge, label: (t) => t.nav.visas, badge: 'VISA', roles: ['OPERATIONS'], flag: 'visaAccess' },
+      { href: '/flights', icon: Plane, label: (t) => t.nav.flights, badge: 'FLIGHT', roles: ['OPERATIONS'] },
     ],
   },
   {
@@ -55,12 +58,14 @@ export function homeFor(role: Role | undefined): string {
 }
 
 /**
- * Salespeople stay in Sales (plus their own account page); operations never
- * see Sales. The admin sees everything.
+ * Salespeople stay in Sales (plus their own account page, and Visas when they
+ * were given access); operations never see Sales. The admin sees everything.
  */
-export function allowedFor(role: Role | undefined, pathname: string): boolean {
-  if (role === 'SALES') return isActive(pathname, '/sales') || isActive(pathname, '/settings');
-  if (role === 'OPERATIONS') return !isActive(pathname, '/sales');
+export function allowedFor(user: { role: Role; visaAccess?: boolean } | null | undefined, pathname: string): boolean {
+  if (user?.role === 'SALES') {
+    return isActive(pathname, '/sales') || isActive(pathname, '/settings') || (Boolean(user.visaAccess) && isActive(pathname, '/visas'));
+  }
+  if (user?.role === 'OPERATIONS') return !isActive(pathname, '/sales');
   return true;
 }
 

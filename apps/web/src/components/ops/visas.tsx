@@ -30,7 +30,10 @@ function VisaForm({ draft, set, errors }: FormProps<VisaItem>) {
           <Field label={t.visas.to} htmlFor="f-toPlace">
             <Input id="f-toPlace" value={draft.toPlace} onChange={(e) => set('toPlace', e.target.value)} placeholder="Cairo" />
           </Field>
-          <Field label={t.visas.passport} htmlFor="f-passportNo" className="sm:col-span-2">
+          <Field label={t.visas.flightNo} htmlFor="f-flightNo">
+            <Input id="f-flightNo" dir="ltr" className="uppercase" value={draft.flightNo} onChange={(e) => set('flightNo', e.target.value)} placeholder="MS 710" />
+          </Field>
+          <Field label={t.visas.passport} htmlFor="f-passportNo">
             <Input id="f-passportNo" dir="ltr" value={draft.passportNo} onChange={(e) => set('passportNo', e.target.value)} />
           </Field>
         </div>
@@ -47,7 +50,7 @@ export const visasConfig: OpsConfig<VisaItem> = {
   icon: FileBadge,
   title: (t) => t.visas.title,
   subtitle: (t) => t.visas.subtitle,
-  searchPlaceholder: (t) => `${t.common.search}: ${t.ops.guestName}، ${t.visas.passport}…`,
+  searchPlaceholder: (t) => `${t.common.search}: ${t.ops.guestName}، ${t.visas.passport}، ${t.visas.flightNo}…`,
   columns: [
     refColumn,
     { key: 'date', header: (t) => t.visas.travelDate, cell: (v) => <DateText value={v.travelDate} />, sortKey: 'travelDate' },
@@ -59,7 +62,11 @@ export const visasConfig: OpsConfig<VisaItem> = {
       cell: (v) => (
         <div className="min-w-[10rem]">
           <RouteText from={v.fromPlace} to={v.toPlace} />
-          {v.passportNo ? <Sub><span className="ltr font-mono">{v.passportNo}</span></Sub> : null}
+          {v.flightNo || v.passportNo ? (
+            <Sub>
+              <span className="ltr font-mono">{[v.flightNo, v.passportNo].filter(Boolean).join(' · ')}</span>
+            </Sub>
+          ) : null}
         </div>
       ),
     },
@@ -98,6 +105,7 @@ export const visasConfig: OpsConfig<VisaItem> = {
         { label: t.visas.travelDate, value: <DateText value={v.travelDate} full /> },
         { label: t.visas.from, value: v.fromPlace ?? '—' },
         { label: t.visas.to, value: v.toPlace ?? '—' },
+        { label: t.visas.flightNo, value: v.flightNo ? <span className="ltr font-mono">{v.flightNo}</span> : '—' },
         { label: t.visas.passport, value: v.passportNo ? <span className="ltr font-mono">{v.passportNo}</span> : '—' },
       ],
     },
@@ -113,13 +121,14 @@ export const visasConfig: OpsConfig<VisaItem> = {
     ...(v.notes ? [{ title: t.common.notes, items: [{ label: t.common.notes, value: <p className="whitespace-pre-wrap font-normal">{v.notes}</p>, wide: true }] }] : []),
   ],
   Form: VisaForm,
-  emptyDraft: () => baseEmpty({ currency: 'USD', pax: '1', fromPlace: '', toPlace: '', travelDate: '', passportNo: '' }),
+  emptyDraft: () => baseEmpty({ currency: 'USD', pax: '1', fromPlace: '', toPlace: '', travelDate: '', flightNo: '', passportNo: '' }),
   toDraft: (v) => ({
     ...baseToDraft(v),
     pax: toStr(v.pax),
     fromPlace: toStr(v.fromPlace),
     toPlace: toStr(v.toPlace),
     travelDate: toStr(v.travelDate),
+    flightNo: toStr(v.flightNo),
     passportNo: toStr(v.passportNo),
   }),
   toPayload: (d) => ({
@@ -128,6 +137,7 @@ export const visasConfig: OpsConfig<VisaItem> = {
     fromPlace: str(d.fromPlace),
     toPlace: str(d.toPlace),
     travelDate: d.travelDate || null,
+    flightNo: str(d.flightNo),
     passportNo: str(d.passportNo),
   }),
   validate: (d, t) => requireFields(d, t, ['guestName']),
